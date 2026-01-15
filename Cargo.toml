@@ -6,12 +6,21 @@ description = "A minimal TUI for API testing"
 license = "MIT"
 
 [dependencies]
-
 ratatui = "0.29"
 crossterm = "0.28"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 anyhow = "1.0"
+dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+walkdir = "2.5"
+regex = "1.11"
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+futures-util = "0.3"
+
+[dev-dependencies]
+tempfile = "3.15"
