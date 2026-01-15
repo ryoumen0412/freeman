@@ -13,6 +13,7 @@ mod discovery;
 mod messages;
 mod app;
 mod network;
+mod constants;
 
 use std::io;
 use std::time::Duration;
@@ -47,6 +48,14 @@ impl Drop for TerminalGuard {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Initialize logging to file
+    let file_appender = tracing_appender::rolling::never(".", "freeman.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    tracing_subscriber::fmt()
+        .with_writer(non_blocking)
+        .with_ansi(false)
+        .init();
+        
     // Terminal setup
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -523,7 +532,7 @@ fn draw_workspace_panel(f: &mut Frame, state: &RenderState, area: Rect) {
             
             f.render_stateful_widget(list, area, &mut list_state);
         }
-        None => {
+        Option::None => {
             let content = "No workspace loaded.\n\nPress 'o' to open a project directory.";
             let paragraph = Paragraph::new(content)
                 .block(Block::default()

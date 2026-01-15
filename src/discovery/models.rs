@@ -8,8 +8,11 @@ use serde::{Deserialize, Serialize};
 pub enum Framework {
     FastAPI,
     Flask,
+    Django,
     Express,
     NestJS,
+    SpringBoot,
+    Laravel,
     Actix,
     Axum,
     Gin,
@@ -22,8 +25,11 @@ impl Framework {
         match self {
             Framework::FastAPI => "FastAPI",
             Framework::Flask => "Flask",
+            Framework::Django => "Django",
             Framework::Express => "Express",
             Framework::NestJS => "NestJS",
+            Framework::SpringBoot => "Spring Boot",
+            Framework::Laravel => "Laravel",
             Framework::Actix => "Actix",
             Framework::Axum => "Axum",
             Framework::Gin => "Gin",
@@ -67,7 +73,7 @@ pub enum ParameterLocation {
 }
 
 /// A discovered parameter
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Parameter {
     pub name: String,
     pub location: ParameterLocation,
@@ -78,7 +84,7 @@ pub struct Parameter {
 }
 
 /// Body schema information
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BodySchema {
     pub content_type: String,
     pub schema_name: Option<String>,
@@ -87,7 +93,7 @@ pub struct BodySchema {
 }
 
 /// A discovered API endpoint
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DiscoveredEndpoint {
     /// HTTP method
     pub method: String,

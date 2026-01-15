@@ -1,4 +1,13 @@
 //! Command handlers - business logic for processing UI events
+//!
+//! This module contains all the command handlers for [`AppState`].
+//! Methods are organized by feature area:
+//! - **Navigation**: Panel switching and focus
+//! - **Input**: Text editing and cursor movement
+//! - **HTTP**: Method cycling, headers, auth
+//! - **Request**: Preparation, validation, and response handling
+//! - **Workspace**: Project discovery and endpoint loading
+//! - **WebSocket**: Connection and message handling
 
 use std::path::PathBuf;
 
@@ -15,14 +24,18 @@ impl AppState {
     // Navigation
     // ========================
     
+    /// Move focus to the next panel in the tab order.
+    /// Panels cycle: Url → Body → Headers → Auth → Workspace → Url
     pub fn next_panel(&mut self) {
         self.active_panel = self.active_panel.next();
     }
     
+    /// Move focus to the previous panel in the tab order.
     pub fn prev_panel(&mut self) {
         self.active_panel = self.active_panel.prev();
     }
     
+    /// Focus the workspace panel directly.
     pub fn focus_workspace(&mut self) {
         self.active_panel = Panel::Workspace;
     }
@@ -184,7 +197,7 @@ impl AppState {
         }
 
         let new_index = match self.history_index {
-            None => Some(0),
+            Option::None => Some(0),
             Some(i) if i + 1 < self.storage.history_len() => Some(i + 1),
             Some(i) => Some(i),
         };
@@ -381,11 +394,20 @@ impl AppState {
         let framework = detector::detect_framework(&path_buf);
         
         let project = match framework {
-            discovery::Framework::FastAPI | discovery::Framework::Flask => {
+            discovery::Framework::FastAPI | discovery::Framework::Flask | discovery::Framework::Django => {
                 Some(discovery::load_python_project(&path_buf, framework))
             }
             discovery::Framework::Express => {
                 Some(discovery::load_express_project(&path_buf))
+            }
+            discovery::Framework::NestJS => {
+                Some(discovery::load_nestjs_project(&path_buf))
+            }
+            discovery::Framework::SpringBoot => {
+                Some(discovery::load_java_project(&path_buf))
+            }
+            discovery::Framework::Laravel => {
+                Some(discovery::load_laravel_project(&path_buf))
             }
             _ => None,
         };
@@ -398,7 +420,7 @@ impl AppState {
             self.response.body = format!("✓ Loaded {} endpoints from {} source code", count, fw_name);
         } else {
             self.response.body = format!(
-                "No supported framework detected in {}\n\nSupported: OpenAPI, FastAPI, Flask, Express.js",
+                "No supported framework detected in {}\n\nSupported: OpenAPI, FastAPI, Flask, Django, Express.js, NestJS, Spring Boot, Laravel",
                 expanded
             );
         }
@@ -481,6 +503,7 @@ impl AppState {
     // Request sending
     // ========================
     
+    #[allow(dead_code)]  // Reserved for non-streaming mode
     pub fn prepare_request(&mut self) -> Option<NetworkCommand> {
         if self.is_loading {
             return None;
@@ -500,9 +523,36 @@ impl AppState {
         })
     }
     
+    /// Validate a URL and return error message if invalid
+    fn validate_url(&self, url: &str) -> Result<(), String> {
+        if url.is_empty() {
+            return Err("URL cannot be empty".to_string());
+        }
+        
+        // Check for basic URL structure
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            return Err("URL must start with http:// or https://".to_string());
+        }
+        
+        // Check for host
+        let without_scheme = url.split("://").nth(1).unwrap_or("");
+        if without_scheme.is_empty() || without_scheme.starts_with('/') {
+            return Err("URL must contain a host".to_string());
+        }
+        
+        Ok(())
+    }
+    
     /// Prepare a streaming request (for large responses with incremental updates)
     pub fn prepare_streaming_request(&mut self) -> Option<NetworkCommand> {
         if self.is_loading {
+            return None;
+        }
+        
+        // Validate URL before sending
+        if let Err(error) = self.validate_url(&self.request.url) {
+            self.response.body = format!("Invalid URL: {}", error);
+            self.response.status_code = None;
             return None;
         }
         
@@ -816,3 +866,144 @@ fn common_prefix(strings: &[String]) -> Option<String> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::AppState;
+    use crate::messages::ui_events::Panel;
+    use crate::models::HttpMethod;
+    
+    fn create_test_state() -> AppState {
+        AppState::new()
+    }
+    
+    // ========================
+    // Navigation tests
+    // ========================
+    
+    #[test]
+    fn test_next_panel_cycles_through_panels() {
+        let mut state = create_test_state();
+        let initial = state.active_panel;
+        
+        state.next_panel();
+        assert_ne!(state.active_panel, initial);
+        
+        // Cycle through all panels
+        for _ in 0..10 {
+            state.next_panel();
+        }
+        // Should eventually return to a valid panel
+        assert!(matches!(state.active_panel, Panel::Url | Panel::Body | Panel::Headers | Panel::Auth | Panel::Workspace));
+    }
+    
+    #[test]
+    fn test_prev_panel_cycles_backwards() {
+        let mut state = create_test_state();
+        let initial = state.active_panel;
+        
+        state.prev_panel();
+        assert_ne!(state.active_panel, initial);
+    }
+    
+    #[test]
+    fn test_focus_workspace() {
+        let mut state = create_test_state();
+        state.active_panel = Panel::Url;
+        
+        state.focus_workspace();
+        
+        assert_eq!(state.active_panel, Panel::Workspace);
+    }
+    
+    // ========================
+    // URL validation tests
+    // ========================
+    
+    #[test]
+    fn test_validate_url_empty() {
+        let state = create_test_state();
+        assert!(state.validate_url("").is_err());
+    }
+    
+    #[test]
+    fn test_validate_url_no_scheme() {
+        let state = create_test_state();
+        assert!(state.validate_url("example.com").is_err());
+    }
+    
+    #[test]
+    fn test_validate_url_http() {
+        let state = create_test_state();
+        assert!(state.validate_url("http://example.com").is_ok());
+    }
+    
+    #[test]
+    fn test_validate_url_https() {
+        let state = create_test_state();
+        assert!(state.validate_url("https://api.example.com/users").is_ok());
+    }
+    
+    #[test]
+    fn test_validate_url_no_host() {
+        let state = create_test_state();
+        assert!(state.validate_url("https://").is_err());
+    }
+    
+    // ========================
+    // HTTP method tests
+    // ========================
+    
+    #[test]
+    fn test_cycle_method() {
+        let mut state = create_test_state();
+        state.request.method = HttpMethod::GET;
+        
+        state.cycle_method();
+        assert_eq!(state.request.method, HttpMethod::POST);
+        
+        state.cycle_method();
+        assert_eq!(state.request.method, HttpMethod::PUT);
+        
+        state.cycle_method();
+        assert_eq!(state.request.method, HttpMethod::PATCH);
+        
+        state.cycle_method();
+        assert_eq!(state.request.method, HttpMethod::DELETE);
+        
+        state.cycle_method();
+        assert_eq!(state.request.method, HttpMethod::GET);
+    }
+    
+    // ========================
+    // Common prefix tests
+    // ========================
+    
+    #[test]
+    fn test_common_prefix_empty() {
+        assert_eq!(common_prefix(&[]), None);
+    }
+    
+    #[test]
+    fn test_common_prefix_single() {
+        let strings = vec!["hello".to_string()];
+        assert_eq!(common_prefix(&strings), Some("hello".to_string()));
+    }
+    
+    #[test]
+    fn test_common_prefix_multiple() {
+        let strings = vec![
+            "/home/user/projects".to_string(),
+            "/home/user/documents".to_string(),
+        ];
+        assert_eq!(common_prefix(&strings), Some("/home/user/".to_string()));
+    }
+    
+    #[test]
+    fn test_common_prefix_no_match() {
+        let strings = vec!["abc".to_string(), "xyz".to_string()];
+        assert_eq!(common_prefix(&strings), None);
+    }
+}
+

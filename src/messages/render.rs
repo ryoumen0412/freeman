@@ -51,21 +51,25 @@ pub struct RenderState {
     
     // WebSocket
     pub ws_url: String,
+    #[allow(dead_code)]  // Reserved for cursor display
     pub ws_url_cursor: usize,
+    #[allow(dead_code)]  // Reserved for cursor display  
     pub ws_editing_url: bool,
     pub ws_connected: bool,
     pub ws_messages: Vec<WsLogEntry>,
     pub ws_input: String,
+    #[allow(dead_code)]  // Reserved for cursor display
     pub ws_input_cursor: usize,
     pub ws_scroll: u16,
 }
 
 impl Default for RenderState {
     fn default() -> Self {
+        use crate::constants::{DEFAULT_HTTP_URL, DEFAULT_WS_URL};
         RenderState {
             active_tab: AppTab::Http,
             method: HttpMethod::GET,
-            url: String::from("https://httpbin.org/get"),
+            url: String::from(DEFAULT_HTTP_URL),
             body: String::new(),
             headers: vec![
                 Header::new("Content-Type", "application/json"),
@@ -88,7 +92,7 @@ impl Default for RenderState {
             show_curl_import: false,
             curl_import_buffer: String::new(),
             show_workspace_input: false,
-            ws_url: String::from("wss://echo.websocket.org"),
+            ws_url: String::from(DEFAULT_WS_URL),
             ws_url_cursor: 0,
             ws_editing_url: false,
             ws_connected: false,

@@ -9,11 +9,13 @@ use crate::network::client::{create_client, execute_request, execute_streaming_r
 use crate::network::websocket::connect_websocket;
 
 /// Tracks an active request for cancellation
+#[allow(dead_code)]
 struct ActiveRequest {
     cancel_tx: oneshot::Sender<()>,
 }
 
 /// Tracks an active WebSocket connection
+#[allow(dead_code)]
 struct ActiveWebSocket {
     message_tx: mpsc::UnboundedSender<String>,
     cancel_tx: oneshot::Sender<()>,
@@ -54,7 +56,9 @@ impl NetworkActor {
 
                             // Simple buffered request - no cancellation tracking
                             self.active_requests.spawn(async move {
+                                tracing::info!(id, url = %request.url, method = ?request.method, "Executing request");
                                 let result = execute_request(&client, request, environment, id).await;
+                                tracing::info!(id, status = ?result.id(), "Request completed");
                                 let _ = response_tx.send(result);
                             });
                         }
@@ -80,6 +84,7 @@ impl NetworkActor {
 
                         Some(NetworkCommand::CancelRequest(id)) => {
                             if let Some(active) = self.cancel_handles.remove(&id) {
+                                tracing::info!(id, "Cancelling request");
                                 let _ = active.cancel_tx.send(());
                                 let _ = self.response_tx.send(NetworkResponse::Cancelled { id });
                             }

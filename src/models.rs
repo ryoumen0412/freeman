@@ -82,10 +82,11 @@ pub struct Request {
 
 impl Default for Request {
     fn default() -> Self {
+        use crate::constants::DEFAULT_HTTP_URL;
         Request {
             name: String::from("New Request"),
             method: HttpMethod::GET,
-            url: String::from("https://httpbin.org/get"),
+            url: String::from(DEFAULT_HTTP_URL),
             headers: vec![
                 Header::new("Content-Type", "application/json"),
                 Header::new("Accept", "application/json"),

@@ -19,11 +19,12 @@ pub enum WsDirection {
 pub struct WsLogEntry {
     pub direction: WsDirection,
     pub content: String,
+    #[allow(dead_code)]  // Reserved for future message timestamp display
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 /// WebSocket connection state
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct WebSocketState {
     pub url: String,
     pub url_cursor: usize,
@@ -34,6 +35,23 @@ pub struct WebSocketState {
     pub input: String,
     pub cursor_position: usize,
     pub scroll: u16,
+}
+
+impl Default for WebSocketState {
+    fn default() -> Self {
+        use crate::constants::DEFAULT_WS_URL;
+        WebSocketState {
+            url: String::from(DEFAULT_WS_URL),
+            url_cursor: 0,
+            editing_url: false,
+            connected: false,
+            connection_id: None,
+            messages: Vec::new(),
+            input: String::new(),
+            cursor_position: 0,
+            scroll: 0,
+        }
+    }
 }
 
 /// Main application state - pure data, no I/O

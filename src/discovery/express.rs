@@ -54,28 +54,40 @@ fn find_js_files(root: &Path) -> Vec<std::path::PathBuf> {
 /// - router.post('/items/:id', ...)
 /// - app.use('/api', router)
 fn parse_express_file(content: &str, file_path: &Path) -> Vec<DiscoveredEndpoint> {
+    use std::sync::OnceLock;
+
+    static ROUTE_REGEX: OnceLock<Regex> = OnceLock::new();
+    static AUTH_REGEX: OnceLock<Regex> = OnceLock::new();
+    static CHAIN_REGEX: OnceLock<Regex> = OnceLock::new();
+
     let mut endpoints = Vec::new();
     
     // Match Express route definitions
     // app.get('/path', handler) or router.post('/path', middleware, handler)
-    let route_pattern = Regex::new(
-        r#"(?:app|router)\.(get|post|put|patch|delete)\s*\(\s*['"`]([^'"`]+)['"`]"#
-    ).unwrap();
+    let route_pattern = ROUTE_REGEX.get_or_init(|| {
+        Regex::new(r#"(?:app|router)\.(get|post|put|patch|delete)\s*\(\s*['"`]([^'"`]+)['"`]"#)
+            .expect("Invalid route regex")
+    });
     
     // Match auth middleware patterns
-    let auth_patterns = [
-        r#"(?:authenticate|auth|verifyToken|isAuthenticated|passport\.authenticate|requireAuth|checkAuth|jwt)"#,
-    ];
-    
-    let auth_regex = Regex::new(auth_patterns[0]).unwrap();
+    let auth_pattern = AUTH_REGEX.get_or_init(|| {
+        Regex::new(r#"(?:authenticate|auth|verifyToken|isAuthenticated|passport\.authenticate|requireAuth|checkAuth|jwt)"#)
+            .expect("Invalid auth regex")
+    });
     
     for (line_num, line) in content.lines().enumerate() {
         if let Some(caps) = route_pattern.captures(line) {
-            let method = caps.get(1).unwrap().as_str().to_uppercase();
-            let path = caps.get(2).unwrap().as_str().to_string();
+            let method = match caps.get(1) {
+                Some(m) => m.as_str().to_uppercase(),
+                None => continue,
+            };
+            let path = match caps.get(2) {
+                Some(p) => p.as_str().to_string(),
+                None => continue,
+            };
             
             // Check if line contains auth middleware
-            let has_auth = auth_regex.is_match(line);
+            let has_auth = auth_pattern.is_match(line);
             
             let mut endpoint = DiscoveredEndpoint::new(&method, &path);
             endpoint.source_file = Some(file_path.to_path_buf());
@@ -87,14 +99,21 @@ fn parse_express_file(content: &str, file_path: &Path) -> Vec<DiscoveredEndpoint
     }
     
     // Also look for router.route('/path').get().post() pattern
-    let chain_pattern = Regex::new(
-        r#"\.route\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(get|post|put|patch|delete)"#
-    ).unwrap();
+    let chain_pattern = CHAIN_REGEX.get_or_init(|| {
+        Regex::new(r#"\.route\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\.(get|post|put|patch|delete)"#)
+            .expect("Invalid chain regex")
+    });
     
     for (line_num, line) in content.lines().enumerate() {
         for caps in chain_pattern.captures_iter(line) {
-            let path = caps.get(1).unwrap().as_str().to_string();
-            let method = caps.get(2).unwrap().as_str().to_uppercase();
+            let path = match caps.get(1) {
+                Some(p) => p.as_str().to_string(),
+                None => continue,
+            };
+            let method = match caps.get(2) {
+                Some(m) => m.as_str().to_uppercase(),
+                None => continue,
+            };
             
             let mut endpoint = DiscoveredEndpoint::new(&method, &path);
             endpoint.source_file = Some(file_path.to_path_buf());
@@ -137,17 +156,71 @@ pub fn load_express_project(project_root: &Path) -> WorkspaceProject {
 }
 
 fn extract_port(content: &str) -> Option<String> {
-    let patterns = [
-        r#"(?:PORT|port)\s*[=:]\s*['"]?(\d+)['"]?"#,
-        r#"listen\s*\(\s*(\d+)"#,
+    use std::sync::OnceLock;
+
+    static PORT_RE_1: OnceLock<Regex> = OnceLock::new();
+    static PORT_RE_2: OnceLock<Regex> = OnceLock::new();
+
+    let regexes = [
+        PORT_RE_1.get_or_init(|| Regex::new(r#"(?:PORT|port)\s*[=:]\s*['"]?(\d+)['"]?"#).unwrap()),
+        PORT_RE_2.get_or_init(|| Regex::new(r#"listen\s*\(\s*(\d+)"#).unwrap()),
     ];
     
-    for pattern in patterns {
-        if let Ok(re) = Regex::new(pattern) {
-            if let Some(caps) = re.captures(content) {
-                return Some(caps.get(1)?.as_str().to_string());
-            }
+    for re in regexes {
+        if let Some(caps) = re.captures(content) {
+            return Some(caps.get(1)?.as_str().to_string());
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_parse_express_routes() {
+        let content = r#"
+            const express = require('express');
+            const app = express();
+            
+            app.get('/users', (req, res) => {});
+            app.post('/api/data', auth, (req, res) => {});
+            
+            router.put('/items/:id', (req, res) => {});
+            
+            app.route('/chain').get((req, res) => {});
+            app.route('/chain').post((req, res) => {});
+        "#;
+        
+        let path = PathBuf::from("test.js");
+        let endpoints = parse_express_file(content, &path);
+        
+        assert_eq!(endpoints.len(), 5);
+        
+        let get_users = endpoints.iter().find(|e| e.path == "/users").unwrap();
+        assert_eq!(get_users.method, "GET");
+        assert!(matches!(get_users.auth, AuthRequirement::None));
+        
+        let post_data = endpoints.iter().find(|e| e.path == "/api/data").unwrap();
+        assert_eq!(post_data.method, "POST");
+        assert!(matches!(post_data.auth, AuthRequirement::Bearer));
+        
+        let put_items = endpoints.iter().find(|e| e.path == "/items/:id").unwrap();
+        assert_eq!(put_items.method, "PUT");
+        
+        let chain_get = endpoints.iter().find(|e| e.path == "/chain" && e.method == "GET").unwrap();
+        let chain_post = endpoints.iter().find(|e| e.path == "/chain" && e.method == "POST").unwrap();
+        assert!(chain_get.line_number.is_some());
+        assert!(chain_post.line_number.is_some());
+    }
+
+    #[test]
+    fn test_extract_port() {
+        assert_eq!(extract_port("const PORT = 3000;"), Some("3000".to_string()));
+        assert_eq!(extract_port("app.listen(8080)"), Some("8080".to_string()));
+        assert_eq!(extract_port("server.listen(  5000  )"), Some("5000".to_string()));
+        assert_eq!(extract_port("val port = process.env.PORT || 3001"), None); // Too complex for simple regex
+    }
 }

@@ -48,7 +48,7 @@ impl Storage {
     }
 
     /// Substitute variables in text using current environment
-    #[allow(dead_code)]  // Prepared for future environment variable feature
+    #[allow(dead_code)] // Prepared for future environment variable feature
     pub fn substitute(&self, text: &str) -> String {
         if let Some(env) = self.current_environment() {
             env.substitute(text)
@@ -58,7 +58,7 @@ impl Storage {
     }
 
     /// Ensure config directory exists
-    #[allow(dead_code)]  // Used by save methods
+    #[allow(dead_code)] // Used by save methods
     fn ensure_dir(&self) -> Result<()> {
         if !self.config_dir.exists() {
             fs::create_dir_all(&self.config_dir)?;
@@ -67,21 +67,23 @@ impl Storage {
     }
 
     /// Save a collection to file
-    #[allow(dead_code)]  // Prepared for future collection persistence
+    #[allow(dead_code)] // Prepared for future collection persistence
     pub fn save_collection(&self, collection: &Collection) -> Result<()> {
         self.ensure_dir()?;
         let path = self.config_dir.join(format!("{}.yaml", collection.name));
-        let content = serde_yaml::to_string(collection)?;
+        let content = serde_yml::to_string(collection)?;
         fs::write(path, content)?;
         Ok(())
     }
 
     /// Save an environment to file
-    #[allow(dead_code)]  // Prepared for future environment persistence
+    #[allow(dead_code)] // Prepared for future environment persistence
     pub fn save_environment(&self, environment: &Environment) -> Result<()> {
         self.ensure_dir()?;
-        let path = self.config_dir.join(format!("{}.env.yaml", environment.name));
-        let content = serde_yaml::to_string(environment)?;
+        let path = self
+            .config_dir
+            .join(format!("{}.env.yaml", environment.name));
+        let content = serde_yml::to_string(environment)?;
         fs::write(path, content)?;
         Ok(())
     }
@@ -95,17 +97,17 @@ impl Storage {
         for entry in fs::read_dir(&self.config_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
                 if filename.ends_with(".env.yaml") {
                     if let Ok(content) = fs::read_to_string(&path) {
-                        if let Ok(env) = serde_yaml::from_str::<Environment>(&content) {
+                        if let Ok(env) = serde_yml::from_str::<Environment>(&content) {
                             self.environments.push(env);
                         }
                     }
                 } else if filename.ends_with(".yaml") {
                     if let Ok(content) = fs::read_to_string(&path) {
-                        if let Ok(col) = serde_yaml::from_str::<Collection>(&content) {
+                        if let Ok(col) = serde_yml::from_str::<Collection>(&content) {
                             self.collections.push(col);
                         }
                     }

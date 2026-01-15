@@ -11,13 +11,23 @@ pub fn detect_framework(project_root: &Path) -> Framework {
         return Framework::OpenAPI;
     }
 
-    // Check Python frameworks
+    // Check Python frameworks (FastAPI, Flask, Django)
     if let Some(framework) = detect_python_framework(project_root) {
         return framework;
     }
 
-    // Check Node.js frameworks
+    // Check Node.js frameworks (NestJS, Express)
     if let Some(framework) = detect_node_framework(project_root) {
+        return framework;
+    }
+
+    // Check Java frameworks (Spring Boot)
+    if let Some(framework) = detect_java_framework(project_root) {
+        return framework;
+    }
+
+    // Check PHP frameworks (Laravel)
+    if let Some(framework) = detect_php_framework(project_root) {
         return framework;
     }
 
@@ -83,6 +93,7 @@ pub fn find_openapi_spec(root: &Path) -> Option<std::path::PathBuf> {
 
 /// Detect Python framework from requirements or pyproject.toml
 fn detect_python_framework(root: &Path) -> Option<Framework> {
+    // Check standard files
     let files_to_check = ["requirements.txt", "pyproject.toml", "setup.py", "Pipfile"];
     
     for file in &files_to_check {
@@ -95,7 +106,15 @@ fn detect_python_framework(root: &Path) -> Option<Framework> {
             if lower.contains("flask") {
                 return Some(Framework::Flask);
             }
+            if lower.contains("django") {
+                return Some(Framework::Django);
+            }
         }
+    }
+
+    // Check for manage.py (Django)
+    if root.join("manage.py").exists() {
+        return Some(Framework::Django);
     }
 
     // Also check main Python files
@@ -145,6 +164,49 @@ fn detect_rust_framework(root: &Path) -> Option<Framework> {
         if lower.contains("axum") {
             return Some(Framework::Axum);
         }
+    }
+
+    None
+}
+
+/// Detect Java framework (Spring Boot)
+fn detect_java_framework(root: &Path) -> Option<Framework> {
+    // Check pom.xml (Maven)
+    if let Ok(content) = fs::read_to_string(root.join("pom.xml")) {
+        if content.contains("spring-boot-starter-web") {
+            return Some(Framework::SpringBoot);
+        }
+    }
+
+    // Check build.gradle (Gradle)
+    if let Ok(content) = fs::read_to_string(root.join("build.gradle")) {
+        if content.contains("org.springframework.boot") {
+            return Some(Framework::SpringBoot);
+        }
+    }
+    
+    // Check Kotlin Gradle
+    if let Ok(content) = fs::read_to_string(root.join("build.gradle.kts")) {
+        if content.contains("org.springframework.boot") {
+            return Some(Framework::SpringBoot);
+        }
+    }
+
+    None
+}
+
+/// Detect PHP framework (Laravel)
+fn detect_php_framework(root: &Path) -> Option<Framework> {
+    // Check composer.json
+    if let Ok(content) = fs::read_to_string(root.join("composer.json")) {
+        if content.contains("laravel/framework") {
+            return Some(Framework::Laravel);
+        }
+    }
+
+    // Check for artisan file
+    if root.join("artisan").exists() {
+        return Some(Framework::Laravel);
     }
 
     None

@@ -46,8 +46,10 @@ pub enum UiEvent {
     CycleAuth,
     NextAuthField,
     
-    // History
+    // History (reserved for future key bindings)
+    #[allow(dead_code)]
     HistoryPrev,
+    #[allow(dead_code)]
     HistoryNext,
     
     // Workspace

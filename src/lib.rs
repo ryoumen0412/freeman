@@ -26,6 +26,7 @@ pub mod discovery;
 pub mod messages;
 pub mod app;
 pub mod network;
+pub mod constants;
 
 // Re-export commonly used types
 pub use models::{Request, HttpMethod, Header, AuthType, Collection, Environment};

@@ -4,6 +4,7 @@ use crate::models::{Environment, Request};
 
 /// Commands sent from App layer to Network layer
 #[derive(Debug, Clone)]
+#[allow(dead_code)]  // ExecuteRequest reserved for non-streaming mode
 pub enum NetworkCommand {
     /// Execute an HTTP request (buffered, for small responses)
     ExecuteRequest {
@@ -40,6 +41,7 @@ pub enum NetworkCommand {
 
 /// Responses sent from Network layer to App layer
 #[derive(Debug, Clone)]
+#[allow(dead_code)]  // StreamComplete used by streaming, kept for completeness
 pub enum NetworkResponse {
     /// Successful HTTP response (complete)
     Success {
@@ -108,17 +110,5 @@ impl NetworkResponse {
             NetworkResponse::WebSocketError { id, .. } => *id,
         }
     }
-    
-    /// Check if this is a terminal response (no more messages expected for this id)
-    pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            NetworkResponse::Success { .. }
-                | NetworkResponse::StreamComplete { .. }
-                | NetworkResponse::Error { .. }
-                | NetworkResponse::Cancelled { .. }
-                | NetworkResponse::WebSocketClosed { .. }
-                | NetworkResponse::WebSocketError { .. }
-        )
-    }
 }
+
