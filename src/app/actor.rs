@@ -23,7 +23,7 @@ impl AppActor {
             render_tx,
         }
     }
-    
+
     /// Run the actor message loop
     pub async fn run(
         mut self,
@@ -32,7 +32,7 @@ impl AppActor {
     ) {
         // Send initial render state
         let _ = self.render_tx.send(self.state.to_render_state());
-        
+
         loop {
             tokio::select! {
                 Some(event) = ui_rx.recv() => {
@@ -51,20 +51,20 @@ impl AppActor {
             }
         }
     }
-    
+
     /// Handle a UI event, returns true if quit was requested
     fn handle_ui_event(&mut self, event: UiEvent) -> bool {
         match event {
             // Tab switching
             UiEvent::SwitchTab(tab) => self.state.switch_tab(tab),
-            
+
             // Panel navigation
             UiEvent::NextPanel => self.state.next_panel(),
             UiEvent::PrevPanel => self.state.prev_panel(),
             UiEvent::FocusWorkspace => self.state.focus_workspace(),
             UiEvent::ScrollUp => self.state.scroll_up(),
             UiEvent::ScrollDown => self.state.scroll_down(),
-            
+
             // Input editing
             UiEvent::StartEditing => self.state.start_editing(),
             UiEvent::StopEditing => self.state.stop_editing(),
@@ -72,7 +72,7 @@ impl AppActor {
             UiEvent::Backspace => self.state.delete_char(),
             UiEvent::CursorLeft => self.state.move_cursor_left(),
             UiEvent::CursorRight => self.state.move_cursor_right(),
-            
+
             // Request actions
             UiEvent::CycleMethod => self.state.cycle_method(),
             UiEvent::SendRequest => {
@@ -89,22 +89,22 @@ impl AppActor {
                     let _ = self.network_tx.send(cmd);
                 }
             }
-            
+
             // Headers
             UiEvent::NextHeader => self.state.next_header(),
             UiEvent::PrevHeader => self.state.prev_header(),
             UiEvent::ToggleHeader => self.state.toggle_header(),
             UiEvent::AddHeader => self.state.add_header(),
             UiEvent::DeleteHeader => self.state.delete_header(),
-            
+
             // Auth
             UiEvent::CycleAuth => self.state.cycle_auth(),
             UiEvent::NextAuthField => self.state.next_auth_field(),
-            
+
             // History
             UiEvent::HistoryPrev => self.state.history_prev(),
             UiEvent::HistoryNext => self.state.history_next(),
-            
+
             // Workspace
             UiEvent::OpenWorkspaceInput => self.state.open_workspace_input(),
             UiEvent::WorkspacePathChar(c) => self.state.workspace_path_char(c),
@@ -115,7 +115,7 @@ impl AppActor {
             UiEvent::NextEndpoint => self.state.next_endpoint(),
             UiEvent::PrevEndpoint => self.state.prev_endpoint(),
             UiEvent::SelectEndpoint => self.state.select_endpoint(),
-            
+
             // cURL
             UiEvent::ShowCurlImport => self.state.show_curl_import(),
             UiEvent::CurlImportChar(c) => self.state.curl_import_char(c),
@@ -123,7 +123,7 @@ impl AppActor {
             UiEvent::ImportCurl => self.state.import_curl(),
             UiEvent::CancelCurlImport => self.state.cancel_curl_import(),
             UiEvent::ExportCurl => self.state.export_curl(),
-            
+
             // WebSocket
             UiEvent::WsConnect => {
                 if let Some(cmd) = self.state.ws_connect() {
@@ -146,15 +146,35 @@ impl AppActor {
             UiEvent::WsBackspace => self.state.ws_backspace(),
             UiEvent::WsCursorLeft => self.state.ws_cursor_left(),
             UiEvent::WsCursorRight => self.state.ws_cursor_right(),
-            
+
+            // GraphQL
+            UiEvent::GqlExecuteQuery => {
+                if self.state.input_mode == crate::messages::ui_events::InputMode::Editing {
+                    self.state.stop_editing();
+                }
+                if let Some(cmd) = self.state.gql_execute_query() {
+                    let _ = self.network_tx.send(cmd);
+                }
+            }
+            UiEvent::GqlEditEndpoint => self.state.gql_edit_endpoint(),
+            UiEvent::GqlEditQuery => self.state.gql_edit_query(),
+            UiEvent::GqlEditVariables => self.state.gql_edit_variables(),
+            UiEvent::GqlCharInput(c) => self.state.gql_char(c),
+            UiEvent::GqlBackspace => self.state.gql_backspace(),
+            UiEvent::GqlCursorLeft => self.state.gql_cursor_left(),
+            UiEvent::GqlCursorRight => self.state.gql_cursor_right(),
+            UiEvent::GqlNextField => self.state.gql_next_field(),
+            UiEvent::GqlScrollUp => self.state.gql_scroll_up(),
+            UiEvent::GqlScrollDown => self.state.gql_scroll_down(),
+
             // Popups
             UiEvent::ToggleHelp => self.state.toggle_help(),
             UiEvent::CloseHelp => self.state.close_help(),
-            
+
             // System
             UiEvent::Quit => return true,
         }
-        
+
         false
     }
 }

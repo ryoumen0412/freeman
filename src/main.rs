@@ -5,36 +5,33 @@
 //! - App Layer - central state machine processing events
 //! - Network Layer (Tokio) - async HTTP execution
 
-mod models;
-mod storage;
-mod ui;
+mod app;
+mod constants;
 mod curl;
 mod discovery;
 mod messages;
-mod app;
+mod models;
 mod network;
-mod constants;
+mod storage;
+mod ui;
 
-use std::io;
-use std::time::Duration;
 use crossterm::{
     event::{self, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    prelude::*,
-    widgets::*,
-};
+use ratatui::{prelude::*, widgets::*};
+use std::io;
+use std::time::Duration;
 use tokio::sync::mpsc;
 
-use messages::{UiEvent, NetworkCommand, NetworkResponse, RenderState};
-use messages::ui_events::{key_to_ui_event, InputMode, Panel};
 use app::AppActor;
-use network::NetworkActor;
-use models::AuthType;
-use ui::{highlight_json, method_color, status_color};
 use discovery::AuthRequirement;
+use messages::ui_events::{key_to_ui_event, InputMode, Panel};
+use messages::{NetworkCommand, NetworkResponse, RenderState, UiEvent};
+use models::AuthType;
+use network::NetworkActor;
+use ui::{highlight_json, method_color, status_color};
 
 /// Terminal cleanup guard
 struct TerminalGuard;
@@ -55,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(non_blocking)
         .with_ansi(false)
         .init();
-        
+
     // Terminal setup
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -133,16 +130,16 @@ async fn run_ui_loop(
 
 fn draw_ui(f: &mut Frame, state: &RenderState) {
     use crate::messages::ui_events::AppTab;
-    
+
     let area = f.area();
 
     // Main layout with tab bar
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // Tab bar
-            Constraint::Min(0),     // Content
-            Constraint::Length(1),  // Status bar
+            Constraint::Length(1), // Tab bar
+            Constraint::Min(0),    // Content
+            Constraint::Length(1), // Status bar
         ])
         .split(area);
 
@@ -153,6 +150,7 @@ fn draw_ui(f: &mut Frame, state: &RenderState) {
     match state.active_tab {
         AppTab::Http => draw_http_tab(f, state, main_chunks[1]),
         AppTab::WebSocket => draw_ws_tab(f, state, main_chunks[1]),
+        AppTab::GraphQL => draw_gql_tab(f, state, main_chunks[1]),
     }
 
     // Status bar
@@ -174,7 +172,7 @@ fn draw_ui(f: &mut Frame, state: &RenderState) {
 
 fn draw_tab_bar(f: &mut Frame, state: &RenderState, area: Rect) {
     use crate::messages::ui_events::AppTab;
-    
+
     let tabs = vec![
         Span::styled(
             " 1:HTTP ",
@@ -182,7 +180,7 @@ fn draw_tab_bar(f: &mut Frame, state: &RenderState, area: Rect) {
                 Style::default().fg(Color::Black).bg(Color::Cyan).bold()
             } else {
                 Style::default().fg(Color::Gray)
-            }
+            },
         ),
         Span::raw(" "),
         Span::styled(
@@ -191,14 +189,27 @@ fn draw_tab_bar(f: &mut Frame, state: &RenderState, area: Rect) {
                 Style::default().fg(Color::Black).bg(Color::Magenta).bold()
             } else {
                 Style::default().fg(Color::Gray)
-            }
+            },
         ),
         Span::styled(
             if state.ws_connected { " [*]" } else { "" },
-            Style::default().fg(Color::Green)
+            Style::default().fg(Color::Green),
+        ),
+        Span::raw(" "),
+        Span::styled(
+            " 3:GraphQL ",
+            if state.active_tab == AppTab::GraphQL {
+                Style::default().fg(Color::Black).bg(Color::Green).bold()
+            } else {
+                Style::default().fg(Color::Gray)
+            },
+        ),
+        Span::styled(
+            if state.gql_is_loading { " [...]" } else { "" },
+            Style::default().fg(Color::Yellow),
         ),
     ];
-    
+
     let tab_line = Line::from(tabs);
     f.render_widget(Paragraph::new(tab_line), area);
 }
@@ -208,9 +219,9 @@ fn draw_http_tab(f: &mut Frame, state: &RenderState, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Method + URL
-            Constraint::Length(8),  // Panels (Body/Headers/Auth)
-            Constraint::Min(5),     // Response
+            Constraint::Length(3), // Method + URL
+            Constraint::Length(8), // Panels (Body/Headers/Auth)
+            Constraint::Min(5),    // Response
         ])
         .split(area);
 
@@ -224,14 +235,18 @@ fn draw_ws_tab(f: &mut Frame, state: &RenderState, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // URL + Connect
-            Constraint::Min(5),     // Messages log
-            Constraint::Length(3),  // Send input
+            Constraint::Length(3), // URL + Connect
+            Constraint::Min(5),    // Messages log
+            Constraint::Length(3), // Send input
         ])
         .split(area);
 
     // URL bar
-    let connected_indicator = if state.ws_connected { " [+] Connected" } else { " [-] Disconnected" };
+    let connected_indicator = if state.ws_connected {
+        " [+] Connected"
+    } else {
+        " [-] Disconnected"
+    };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(if state.input_mode == InputMode::Editing {
@@ -240,7 +255,7 @@ fn draw_ws_tab(f: &mut Frame, state: &RenderState, area: Rect) {
             Style::default().fg(Color::Magenta)
         })
         .title(format!(" WebSocket{} ", connected_indicator));
-    
+
     let url_text = Paragraph::new(state.ws_url.as_str()).block(block);
     f.render_widget(url_text, chunks[0]);
 
@@ -248,7 +263,7 @@ fn draw_ws_tab(f: &mut Frame, state: &RenderState, area: Rect) {
     let messages_block = Block::default()
         .borders(Borders::ALL)
         .title(" Messages (↑/↓ scroll) ");
-    
+
     let mut lines: Vec<Line> = Vec::new();
     for entry in &state.ws_messages {
         let style = match entry.direction {
@@ -261,16 +276,19 @@ fn draw_ws_tab(f: &mut Frame, state: &RenderState, area: Rect) {
             crate::app::state::WsDirection::Received => "<< ",
             crate::app::state::WsDirection::System => "-- ",
         };
-        lines.push(Line::from(Span::styled(format!("{}{}", prefix, entry.content), style)));
+        lines.push(Line::from(Span::styled(
+            format!("{}{}", prefix, entry.content),
+            style,
+        )));
     }
-    
+
     if lines.is_empty() {
         lines.push(Line::from(Span::styled(
             "No messages yet. Press 'c' to connect, 's' to send.",
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(Color::DarkGray),
         )));
     }
-    
+
     let messages = Paragraph::new(lines)
         .block(messages_block)
         .scroll((state.ws_scroll, 0));
@@ -285,9 +303,98 @@ fn draw_ws_tab(f: &mut Frame, state: &RenderState, area: Rect) {
             Style::default()
         })
         .title(" Send Message (e=edit, s=send) ");
-    
+
     let input = Paragraph::new(state.ws_input.as_str()).block(input_block);
     f.render_widget(input, chunks[2]);
+}
+
+fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
+    use crate::messages::ui_events::GqlField;
+
+    // GraphQL tab layout
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Endpoint URL
+            Constraint::Min(6),    // Query + Variables (side by side)
+            Constraint::Min(5),    // Response
+        ])
+        .split(area);
+
+    // Endpoint URL bar
+    let endpoint_border =
+        if state.gql_active_field == GqlField::Endpoint && state.input_mode == InputMode::Editing {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::Green)
+        };
+    let endpoint_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(endpoint_border)
+        .title(" GraphQL Endpoint (u=edit) ");
+    let endpoint = Paragraph::new(state.gql_endpoint.as_str()).block(endpoint_block);
+    f.render_widget(endpoint, chunks[0]);
+
+    // Query + Variables side by side
+    let middle_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(65), // Query (larger)
+            Constraint::Percentage(35), // Variables
+        ])
+        .split(chunks[1]);
+
+    // Query editor
+    let query_border =
+        if state.gql_active_field == GqlField::Query && state.input_mode == InputMode::Editing {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::Green)
+        };
+    let query_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(query_border)
+        .title(" Query (e=edit) ");
+    let query = Paragraph::new(state.gql_query.as_str())
+        .block(query_block)
+        .wrap(Wrap { trim: false });
+    f.render_widget(query, middle_chunks[0]);
+
+    // Variables editor
+    let vars_border = if state.gql_active_field == GqlField::Variables
+        && state.input_mode == InputMode::Editing
+    {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Green)
+    };
+    let vars_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(vars_border)
+        .title(" Variables (v=edit) ");
+    let vars = Paragraph::new(state.gql_variables.as_str())
+        .block(vars_block)
+        .wrap(Wrap { trim: false });
+    f.render_widget(vars, middle_chunks[1]);
+
+    // Response panel
+    let time_text = if state.gql_time_ms > 0 {
+        format!(" {}ms ", state.gql_time_ms)
+    } else {
+        String::new()
+    };
+    let response_block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Response (s=execute, ↑/↓=scroll) ")
+        .title_bottom(Line::from(time_text).right_aligned());
+
+    // Use syntax highlighting for JSON
+    let lines = highlight_json(&state.gql_response);
+    let response = Paragraph::new(lines)
+        .block(response_block)
+        .wrap(Wrap { trim: false })
+        .scroll((state.gql_response_scroll, 0));
+    f.render_widget(response, chunks[2]);
 }
 
 fn draw_url_bar(f: &mut Frame, state: &RenderState, area: Rect) {
@@ -303,12 +410,20 @@ fn draw_url_bar(f: &mut Frame, state: &RenderState, area: Rect) {
     };
 
     let loading = if state.is_loading { " [...]" } else { "" };
-    let history_indicator = state.history_index.map(|i| format!(" [{}]", i + 1)).unwrap_or_default();
+    let history_indicator = state
+        .history_index
+        .map(|i| format!(" [{}]", i + 1))
+        .unwrap_or_default();
 
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style)
-        .title(format!(" {}{}{} ", state.method.as_str(), loading, history_indicator))
+        .title(format!(
+            " {}{}{} ",
+            state.method.as_str(),
+            loading,
+            history_indicator
+        ))
         .title_style(Style::default().fg(mcolor).bold());
 
     let input = Paragraph::new(state.url.as_str()).block(block);
@@ -406,7 +521,9 @@ fn draw_headers_panel(f: &mut Frame, state: &RenderState, area: Rect) {
         Style::default()
     };
 
-    let items: Vec<ListItem> = state.headers.iter()
+    let items: Vec<ListItem> = state
+        .headers
+        .iter()
         .enumerate()
         .map(|(i, h)| {
             let style = if !h.enabled {
@@ -421,11 +538,12 @@ fn draw_headers_panel(f: &mut Frame, state: &RenderState, area: Rect) {
         })
         .collect();
 
-    let list = List::new(items)
-        .block(Block::default()
+    let list = List::new(items).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(border_style)
-            .title(" Headers (a:add d:del Enter:toggle) "));
+            .title(" Headers (a:add d:del Enter:toggle) "),
+    );
     f.render_widget(list, area);
 }
 
@@ -441,17 +559,31 @@ fn draw_auth_panel(f: &mut Frame, state: &RenderState, area: Rect) {
 
     let (auth_type, content) = match &state.auth {
         AuthType::None => ("None", String::from("Press 't' to cycle auth type")),
-        AuthType::Bearer(token) => ("Bearer", format!("Token: {}", if token.is_empty() { "<empty>" } else { token })),
+        AuthType::Bearer(token) => (
+            "Bearer",
+            format!(
+                "Token: {}",
+                if token.is_empty() { "<empty>" } else { token }
+            ),
+        ),
         AuthType::Basic { username, password } => {
-            let pass_display = if password.is_empty() { 
-                "<empty>".to_string() 
-            } else { 
-                "*".repeat(password.len()) 
+            let pass_display = if password.is_empty() {
+                "<empty>".to_string()
+            } else {
+                "*".repeat(password.len())
             };
-            ("Basic", format!("User: {}  Pass: {}", 
-                if username.is_empty() { "<empty>" } else { username },
-                pass_display
-            ))
+            (
+                "Basic",
+                format!(
+                    "User: {}  Pass: {}",
+                    if username.is_empty() {
+                        "<empty>"
+                    } else {
+                        username
+                    },
+                    pass_display
+                ),
+            )
         }
     };
 
@@ -480,13 +612,16 @@ fn draw_workspace_panel(f: &mut Frame, state: &RenderState, area: Rect) {
 
     match &state.workspace {
         Some(ws) => {
-            let title = format!(" 📂 {} ({}) - {} endpoints ", 
+            let title = format!(
+                " 📂 {} ({}) - {} endpoints ",
                 ws.title.as_deref().unwrap_or("Workspace"),
                 ws.framework.as_str(),
                 ws.endpoints.len()
             );
 
-            let items: Vec<ListItem> = ws.endpoints.iter()
+            let items: Vec<ListItem> = ws
+                .endpoints
+                .iter()
                 .map(|ep| {
                     let mcolor = match ep.method.as_str() {
                         "GET" => Color::Green,
@@ -496,7 +631,7 @@ fn draw_workspace_panel(f: &mut Frame, state: &RenderState, area: Rect) {
                         "DELETE" => Color::Red,
                         _ => Color::White,
                     };
-                    
+
                     let auth_indicator = match &ep.auth {
                         AuthRequirement::None => "",
                         AuthRequirement::Bearer => " 🔑",
@@ -506,10 +641,10 @@ fn draw_workspace_panel(f: &mut Frame, state: &RenderState, area: Rect) {
 
                     let method_span = Span::styled(
                         format!("{:6}", ep.method),
-                        Style::default().fg(mcolor).bold()
+                        Style::default().fg(mcolor).bold(),
                     );
                     let path_span = Span::raw(format!(" {}{}", ep.path, auth_indicator));
-                    
+
                     ListItem::new(Line::from(vec![method_span, path_span]))
                 })
                 .collect();
@@ -521,24 +656,28 @@ fn draw_workspace_panel(f: &mut Frame, state: &RenderState, area: Rect) {
             };
 
             let list = List::new(items)
-                .block(Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(border_style)
-                    .title(title))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(border_style)
+                        .title(title),
+                )
                 .highlight_style(highlight_style);
 
             let mut list_state = ListState::default();
             list_state.select(Some(state.selected_endpoint));
-            
+
             f.render_stateful_widget(list, area, &mut list_state);
         }
         Option::None => {
             let content = "No workspace loaded.\n\nPress 'o' to open a project directory.";
             let paragraph = Paragraph::new(content)
-                .block(Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(border_style)
-                    .title(" 📂 Workspace "))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(border_style)
+                        .title(" 📂 Workspace "),
+                )
                 .wrap(Wrap { trim: false });
             f.render_widget(paragraph, area);
         }
@@ -591,8 +730,7 @@ fn draw_status_bar(f: &mut Frame, state: &RenderState, area: Rect) {
         " Tab:panel | e:edit | m:method | s:send | ?:help | q:quit "
     };
 
-    let bar = Paragraph::new(status)
-        .style(Style::default().fg(Color::DarkGray));
+    let bar = Paragraph::new(status).style(Style::default().fg(Color::DarkGray));
     f.render_widget(bar, area);
 }
 

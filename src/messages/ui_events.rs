@@ -8,6 +8,7 @@ pub enum AppTab {
     #[default]
     Http,
     WebSocket,
+    GraphQL,
 }
 
 /// Events generated from user input in the UI layer
@@ -15,13 +16,13 @@ pub enum AppTab {
 pub enum UiEvent {
     // Tab navigation
     SwitchTab(AppTab),
-    
+
     // Panel navigation
     NextPanel,
     PrevPanel,
     ScrollUp,
     ScrollDown,
-    
+
     // Input editing
     StartEditing,
     StopEditing,
@@ -29,29 +30,29 @@ pub enum UiEvent {
     Backspace,
     CursorLeft,
     CursorRight,
-    
+
     // HTTP Request actions
     SendRequest,
     CancelRequest,
     CycleMethod,
-    
+
     // Headers
     NextHeader,
     PrevHeader,
     ToggleHeader,
     AddHeader,
     DeleteHeader,
-    
+
     // Auth
     CycleAuth,
     NextAuthField,
-    
+
     // History (reserved for future key bindings)
     #[allow(dead_code)]
     HistoryPrev,
     #[allow(dead_code)]
     HistoryNext,
-    
+
     // Workspace
     FocusWorkspace,
     OpenWorkspaceInput,
@@ -63,7 +64,7 @@ pub enum UiEvent {
     NextEndpoint,
     PrevEndpoint,
     SelectEndpoint,
-    
+
     // cURL
     ShowCurlImport,
     CurlImportChar(char),
@@ -71,22 +72,35 @@ pub enum UiEvent {
     ImportCurl,
     CancelCurlImport,
     ExportCurl,
-    
+
     // WebSocket actions
     WsConnect,
     WsDisconnect,
     WsSend,
-    WsEditUrl,      // Edit WS URL
-    WsEditMessage,  // Edit message input
+    WsEditUrl,     // Edit WS URL
+    WsEditMessage, // Edit message input
     WsCharInput(char),
     WsBackspace,
     WsCursorLeft,
     WsCursorRight,
-    
+
     // Popups
     ToggleHelp,
     CloseHelp,
-    
+
+    // GraphQL actions
+    GqlExecuteQuery,
+    GqlEditEndpoint,
+    GqlEditQuery,
+    GqlEditVariables,
+    GqlCharInput(char),
+    GqlBackspace,
+    GqlCursorLeft,
+    GqlCursorRight,
+    GqlNextField,
+    GqlScrollUp,
+    GqlScrollDown,
+
     // System
     Quit,
 }
@@ -141,6 +155,15 @@ pub enum AuthField {
     Password,
 }
 
+/// GraphQL editing field
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub enum GqlField {
+    #[default]
+    Endpoint,
+    Query,
+    Variables,
+}
+
 /// Convert a key event to a UiEvent based on current UI context
 pub fn key_to_ui_event(
     key: KeyEvent,
@@ -152,11 +175,11 @@ pub fn key_to_ui_event(
     show_workspace_input: bool,
 ) -> Option<UiEvent> {
     use crossterm::event::KeyEventKind;
-    
+
     if key.kind != KeyEventKind::Press {
         return None;
     }
-    
+
     // Global Ctrl shortcuts
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
@@ -165,21 +188,22 @@ pub fn key_to_ui_event(
             _ => {}
         }
     }
-    
-    // Tab switching: 1 and 2 keys (only in normal mode, not editing)
+
+    // Tab switching: 1, 2, 3 keys (only in normal mode, not editing)
     if input_mode == InputMode::Normal && !show_help && !show_curl_import && !show_workspace_input {
         match key.code {
             KeyCode::Char('1') => return Some(UiEvent::SwitchTab(AppTab::Http)),
             KeyCode::Char('2') => return Some(UiEvent::SwitchTab(AppTab::WebSocket)),
+            KeyCode::Char('3') => return Some(UiEvent::SwitchTab(AppTab::GraphQL)),
             _ => {}
         }
     }
-    
+
     // Handle popups first (same for all tabs)
     if show_help {
         return Some(UiEvent::CloseHelp);
     }
-    
+
     if show_curl_import {
         return match key.code {
             KeyCode::Esc => Some(UiEvent::CancelCurlImport),
@@ -189,7 +213,7 @@ pub fn key_to_ui_event(
             _ => None,
         };
     }
-    
+
     if show_workspace_input {
         return match key.code {
             KeyCode::Esc => Some(UiEvent::CancelWorkspaceInput),
@@ -200,16 +224,21 @@ pub fn key_to_ui_event(
             _ => None,
         };
     }
-    
+
     // Tab-specific key handling
     match active_tab {
         AppTab::Http => handle_http_tab_keys(key, active_panel, input_mode),
         AppTab::WebSocket => handle_ws_tab_keys(key, input_mode),
+        AppTab::GraphQL => handle_gql_tab_keys(key, input_mode),
     }
 }
 
 /// Handle keys for HTTP tab
-fn handle_http_tab_keys(key: KeyEvent, active_panel: Panel, input_mode: InputMode) -> Option<UiEvent> {
+fn handle_http_tab_keys(
+    key: KeyEvent,
+    active_panel: Panel,
+    input_mode: InputMode,
+) -> Option<UiEvent> {
     match input_mode {
         InputMode::Normal => match key.code {
             KeyCode::Char('q') => Some(UiEvent::Quit),
@@ -272,8 +301,8 @@ fn handle_ws_tab_keys(key: KeyEvent, input_mode: InputMode) -> Option<UiEvent> {
             KeyCode::Char('?') => Some(UiEvent::ToggleHelp),
             KeyCode::Char('c') => Some(UiEvent::WsConnect),
             KeyCode::Char('d') => Some(UiEvent::WsDisconnect),
-            KeyCode::Char('u') => Some(UiEvent::WsEditUrl),      // Edit URL
-            KeyCode::Char('e') => Some(UiEvent::WsEditMessage),  // Edit message
+            KeyCode::Char('u') => Some(UiEvent::WsEditUrl), // Edit URL
+            KeyCode::Char('e') => Some(UiEvent::WsEditMessage), // Edit message
             KeyCode::Char('s') | KeyCode::Enter => Some(UiEvent::WsSend),
             KeyCode::Up => Some(UiEvent::ScrollUp),
             KeyCode::Down => Some(UiEvent::ScrollDown),
@@ -285,6 +314,34 @@ fn handle_ws_tab_keys(key: KeyEvent, input_mode: InputMode) -> Option<UiEvent> {
             KeyCode::Right => Some(UiEvent::WsCursorRight),
             KeyCode::Backspace => Some(UiEvent::WsBackspace),
             KeyCode::Char(c) => Some(UiEvent::WsCharInput(c)),
+            KeyCode::Enter => Some(UiEvent::StopEditing),
+            _ => None,
+        },
+    }
+}
+
+/// Handle keys for GraphQL tab
+fn handle_gql_tab_keys(key: KeyEvent, input_mode: InputMode) -> Option<UiEvent> {
+    match input_mode {
+        InputMode::Normal => match key.code {
+            KeyCode::Char('q') => Some(UiEvent::Quit),
+            KeyCode::Char('?') => Some(UiEvent::ToggleHelp),
+            KeyCode::Char('u') => Some(UiEvent::GqlEditEndpoint),
+            KeyCode::Char('e') => Some(UiEvent::GqlEditQuery),
+            KeyCode::Char('v') => Some(UiEvent::GqlEditVariables),
+            KeyCode::Tab => Some(UiEvent::GqlNextField),
+            KeyCode::Char('s') | KeyCode::Enter => Some(UiEvent::GqlExecuteQuery),
+            KeyCode::Up => Some(UiEvent::GqlScrollUp),
+            KeyCode::Down => Some(UiEvent::GqlScrollDown),
+            _ => None,
+        },
+        InputMode::Editing => match key.code {
+            KeyCode::Esc => Some(UiEvent::StopEditing),
+            KeyCode::Left => Some(UiEvent::GqlCursorLeft),
+            KeyCode::Right => Some(UiEvent::GqlCursorRight),
+            KeyCode::Backspace => Some(UiEvent::GqlBackspace),
+            KeyCode::Char(c) => Some(UiEvent::GqlCharInput(c)),
+            KeyCode::Tab => Some(UiEvent::GqlNextField),
             KeyCode::Enter => Some(UiEvent::StopEditing),
             _ => None,
         },

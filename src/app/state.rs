@@ -1,10 +1,10 @@
 //! App state - pure data structure with no I/O logic
 
+use crate::discovery::WorkspaceProject;
+use crate::messages::ui_events::{AppTab, AuthField, GqlField, InputMode, Panel};
+use crate::messages::RenderState;
 use crate::models::{AuthType, Request, Response};
 use crate::storage::Storage;
-use crate::discovery::WorkspaceProject;
-use crate::messages::ui_events::{AppTab, AuthField, InputMode, Panel};
-use crate::messages::RenderState;
 
 /// Direction of WebSocket message
 #[derive(Clone, Debug)]
@@ -19,7 +19,7 @@ pub enum WsDirection {
 pub struct WsLogEntry {
     pub direction: WsDirection,
     pub content: String,
-    #[allow(dead_code)]  // Reserved for future message timestamp display
+    #[allow(dead_code)] // Reserved for future message timestamp display
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
@@ -28,7 +28,7 @@ pub struct WsLogEntry {
 pub struct WebSocketState {
     pub url: String,
     pub url_cursor: usize,
-    pub editing_url: bool,  // true = editing URL, false = editing message input
+    pub editing_url: bool, // true = editing URL, false = editing message input
     pub connected: bool,
     pub connection_id: Option<u64>,
     pub messages: Vec<WsLogEntry>,
@@ -54,55 +54,94 @@ impl Default for WebSocketState {
     }
 }
 
+/// GraphQL state
+#[derive(Clone, Debug)]
+pub struct GraphQLState {
+    pub endpoint: String,
+    pub endpoint_cursor: usize,
+    pub query: String,
+    pub query_cursor: usize,
+    pub variables: String,
+    pub variables_cursor: usize,
+    pub active_field: GqlField,
+    pub response: String,
+    pub response_scroll: u16,
+    pub is_loading: bool,
+    pub time_ms: u64,
+    pub pending_request_id: Option<u64>,
+}
+
+impl Default for GraphQLState {
+    fn default() -> Self {
+        GraphQLState {
+            endpoint: String::from("https://api.example.com/graphql"),
+            endpoint_cursor: 0,
+            query: String::from("query {\n  \n}"),
+            query_cursor: 0,
+            variables: String::from("{}"),
+            variables_cursor: 0,
+            active_field: GqlField::Query,
+            response: String::new(),
+            response_scroll: 0,
+            is_loading: false,
+            time_ms: 0,
+            pending_request_id: None,
+        }
+    }
+}
+
 /// Main application state - pure data, no I/O
 pub struct AppState {
     // Tab navigation
     pub active_tab: AppTab,
-    
+
     // HTTP Request data
     pub request: Request,
     pub cursor_position: usize,
-    
+
     // UI state
     pub active_panel: Panel,
     pub input_mode: InputMode,
     pub response_scroll: u16,
-    
+
     // HTTP Response
     pub response: Response,
     pub is_loading: bool,
     pub next_request_id: u64,
     pub pending_request_id: Option<u64>,
-    
+
     // Streaming state
     pub streaming_body: String,
     pub bytes_received: usize,
-    
+
     // Headers panel
     pub selected_header: usize,
-    
+
     // Auth panel
     pub auth_field: AuthField,
-    
+
     // History
     pub history_index: Option<usize>,
-    
+
     // Storage (persisted data)
     pub storage: Storage,
-    
+
     // Workspace discovery
     pub workspace: Option<WorkspaceProject>,
     pub workspace_path_input: String,
     pub selected_endpoint: usize,
-    
+
     // Popups
     pub show_help: bool,
     pub show_curl_import: bool,
     pub curl_import_buffer: String,
     pub show_workspace_input: bool,
-    
+
     // WebSocket state (persists across tab switches)
     pub ws: WebSocketState,
+
+    // GraphQL state
+    pub gql: GraphQLState,
 }
 
 impl Default for AppState {
@@ -138,16 +177,17 @@ impl AppState {
             curl_import_buffer: String::new(),
             show_workspace_input: false,
             ws: WebSocketState::default(),
+            gql: GraphQLState::default(),
         }
     }
-    
+
     /// Generate a unique request ID
     pub fn next_id(&mut self) -> u64 {
         let id = self.next_request_id;
         self.next_request_id += 1;
         id
     }
-    
+
     /// Get the current input field content
     pub fn current_input(&self) -> &str {
         match self.active_panel {
@@ -155,13 +195,11 @@ impl AppState {
             Panel::Body => &self.request.body,
             Panel::Auth => match &self.request.auth {
                 AuthType::Bearer(token) => token,
-                AuthType::Basic { username, password } => {
-                    match self.auth_field {
-                        AuthField::Token => "",
-                        AuthField::Username => username,
-                        AuthField::Password => password,
-                    }
-                }
+                AuthType::Basic { username, password } => match self.auth_field {
+                    AuthField::Token => "",
+                    AuthField::Username => username,
+                    AuthField::Password => password,
+                },
                 AuthType::None => "",
             },
             _ => "",
@@ -187,7 +225,7 @@ impl AppState {
             _ => &mut self.request.url, // fallback
         }
     }
-    
+
     /// Convert state to RenderState for UI
     pub fn to_render_state(&self) -> RenderState {
         RenderState {
@@ -221,6 +259,17 @@ impl AppState {
             ws_input: self.ws.input.clone(),
             ws_input_cursor: self.ws.cursor_position,
             ws_scroll: self.ws.scroll,
+            gql_endpoint: self.gql.endpoint.clone(),
+            gql_endpoint_cursor: self.gql.endpoint_cursor,
+            gql_query: self.gql.query.clone(),
+            gql_query_cursor: self.gql.query_cursor,
+            gql_variables: self.gql.variables.clone(),
+            gql_variables_cursor: self.gql.variables_cursor,
+            gql_active_field: self.gql.active_field,
+            gql_response: self.gql.response.clone(),
+            gql_response_scroll: self.gql.response_scroll,
+            gql_is_loading: self.gql.is_loading,
+            gql_time_ms: self.gql.time_ms,
         }
     }
 }

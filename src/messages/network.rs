@@ -4,7 +4,7 @@ use crate::models::{Environment, Request};
 
 /// Commands sent from App layer to Network layer
 #[derive(Debug, Clone)]
-#[allow(dead_code)]  // ExecuteRequest reserved for non-streaming mode
+#[allow(dead_code)] // ExecuteRequest reserved for non-streaming mode
 pub enum NetworkCommand {
     /// Execute an HTTP request (buffered, for small responses)
     ExecuteRequest {
@@ -20,28 +20,32 @@ pub enum NetworkCommand {
     },
     /// Cancel a pending request
     CancelRequest(u64),
-    
+
     // WebSocket commands
     /// Connect to a WebSocket server
-    ConnectWebSocket {
-        id: u64,
-        url: String,
-    },
+    ConnectWebSocket { id: u64, url: String },
     /// Send a message through an active WebSocket connection
-    SendWebSocketMessage {
-        id: u64,
-        message: String,
-    },
+    SendWebSocketMessage { id: u64, message: String },
     /// Close a WebSocket connection
     CloseWebSocket(u64),
-    
+
+    /// Execute a GraphQL query
+    ExecuteGraphQL {
+        id: u64,
+        endpoint: String,
+        query: String,
+        variables: Option<String>,
+        headers: Vec<crate::models::Header>,
+        auth: crate::models::AuthType,
+    },
+
     /// Shutdown the network actor
     Shutdown,
 }
 
 /// Responses sent from Network layer to App layer
 #[derive(Debug, Clone)]
-#[allow(dead_code)]  // StreamComplete used by streaming, kept for completeness
+#[allow(dead_code)] // StreamComplete used by streaming, kept for completeness
 pub enum NetworkResponse {
     /// Successful HTTP response (complete)
     Success {
@@ -70,29 +74,17 @@ pub enum NetworkResponse {
         time_ms: u64,
     },
     /// Request was cancelled
-    Cancelled {
-        id: u64,
-    },
-    
+    Cancelled { id: u64 },
+
     // WebSocket responses
     /// WebSocket connection established
-    WebSocketConnected {
-        id: u64,
-    },
+    WebSocketConnected { id: u64 },
     /// WebSocket message received
-    WebSocketMessage {
-        id: u64,
-        message: String,
-    },
+    WebSocketMessage { id: u64, message: String },
     /// WebSocket connection closed
-    WebSocketClosed {
-        id: u64,
-    },
+    WebSocketClosed { id: u64 },
     /// WebSocket error
-    WebSocketError {
-        id: u64,
-        error: String,
-    },
+    WebSocketError { id: u64, error: String },
 }
 
 impl NetworkResponse {
@@ -111,4 +103,3 @@ impl NetworkResponse {
         }
     }
 }
-

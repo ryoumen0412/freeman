@@ -1,12 +1,12 @@
 //! HTTP client wrapper - executes requests and formats responses
 
-use std::time::Instant;
 use base64::Engine;
 use futures_util::StreamExt;
+use std::time::Instant;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::models::{AuthType, Environment, HttpMethod, Request};
 use crate::messages::NetworkResponse;
+use crate::models::{AuthType, Environment, HttpMethod, Request};
 
 /// Build a request from the given parameters
 fn build_request(
@@ -90,11 +90,12 @@ pub async fn execute_request(
             let status = resp.status().as_u16();
             match resp.text().await {
                 Ok(body) => {
-                    let formatted = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-                        serde_json::to_string_pretty(&json).unwrap_or(body)
-                    } else {
-                        body
-                    };
+                    let formatted =
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                            serde_json::to_string_pretty(&json).unwrap_or(body)
+                        } else {
+                            body
+                        };
                     NetworkResponse::Success {
                         id: request_id,
                         status,
@@ -150,7 +151,7 @@ pub async fn execute_streaming_request(
             loop {
                 tokio::select! {
                     biased;
-                    
+
                     _ = &mut cancel_rx => {
                         // Request was cancelled
                         return;
@@ -183,7 +184,7 @@ pub async fn execute_streaming_request(
                                 } else {
                                     body
                                 };
-                                
+
                                 // Send final formatted body as success
                                 let _ = response_tx.send(NetworkResponse::Success {
                                     id: request_id,
@@ -215,10 +216,117 @@ pub async fn execute_streaming_request(
     }
 }
 
+/// Execute a GraphQL query
+pub async fn execute_graphql(
+    client: &reqwest::Client,
+    endpoint: String,
+    query: String,
+    variables: Option<String>,
+    headers: Vec<crate::models::Header>,
+    auth: crate::models::AuthType,
+    request_id: u64,
+) -> NetworkResponse {
+    use base64::Engine;
+    use std::time::Instant;
+
+    let start = Instant::now();
+
+    // Build GraphQL request body
+    let body = if let Some(vars) = &variables {
+        // Try to parse variables as JSON
+        match serde_json::from_str::<serde_json::Value>(vars) {
+            Ok(vars_json) => serde_json::json!({
+                "query": query,
+                "variables": vars_json
+            }),
+            Err(_) => serde_json::json!({
+                "query": query
+            }),
+        }
+    } else {
+        serde_json::json!({
+            "query": query
+        })
+    };
+
+    // Build request
+    let mut req_builder = client
+        .post(&endpoint)
+        .header("Content-Type", "application/json")
+        .json(&body);
+
+    // Add custom headers
+    for header in &headers {
+        if header.enabled {
+            req_builder = req_builder.header(&header.key, &header.value);
+        }
+    }
+
+    // Add auth
+    match &auth {
+        crate::models::AuthType::Bearer(token) => {
+            if !token.is_empty() {
+                req_builder = req_builder.header("Authorization", format!("Bearer {}", token));
+            }
+        }
+        crate::models::AuthType::Basic { username, password } => {
+            let credentials = format!("{}:{}", username, password);
+            let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
+            req_builder = req_builder.header("Authorization", format!("Basic {}", encoded));
+        }
+        crate::models::AuthType::None => {}
+    }
+
+    let result = req_builder.send().await;
+    let elapsed = start.elapsed().as_millis() as u64;
+
+    match result {
+        Ok(resp) => {
+            let status = resp.status().as_u16();
+            match resp.text().await {
+                Ok(body) => {
+                    // Pretty-print JSON response
+                    let formatted =
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                            serde_json::to_string_pretty(&json).unwrap_or(body)
+                        } else {
+                            body
+                        };
+                    NetworkResponse::Success {
+                        id: request_id,
+                        status,
+                        body: formatted,
+                        time_ms: elapsed,
+                    }
+                }
+                Err(e) => NetworkResponse::Error {
+                    id: request_id,
+                    message: format!("Error reading response: {}", e),
+                    time_ms: elapsed,
+                },
+            }
+        }
+        Err(e) => {
+            let msg = if e.is_timeout() {
+                "Request timed out (30s)".to_string()
+            } else if e.is_connect() {
+                format!("Connection failed: {}", e)
+            } else {
+                format!("Request failed: {}", e)
+            };
+            NetworkResponse::Error {
+                id: request_id,
+                message: msg,
+                time_ms: elapsed,
+            }
+        }
+    }
+}
+
 /// Create an HTTP client with default configuration
 pub fn create_client() -> reqwest::Client {
     use std::time::Duration;
-    
+
     reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()

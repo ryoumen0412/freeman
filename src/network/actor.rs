@@ -46,7 +46,7 @@ impl NetworkActor {
         loop {
             tokio::select! {
                 biased;
-                
+
                 // Handle incoming commands
                 cmd = cmd_rx.recv() => {
                     match cmd {
@@ -93,14 +93,14 @@ impl NetworkActor {
                         Some(NetworkCommand::ConnectWebSocket { id, url }) => {
                             let (cancel_tx, cancel_rx) = oneshot::channel();
                             let (message_tx, message_rx) = mpsc::unbounded_channel();
-                            
+
                             self.websockets.insert(id, ActiveWebSocket {
                                 message_tx,
                                 cancel_tx,
                             });
 
                             let response_tx = self.response_tx.clone();
-                            
+
                             self.active_requests.spawn(async move {
                                 connect_websocket(id, &url, response_tx, message_rx, cancel_rx).await;
                             });
@@ -116,6 +116,26 @@ impl NetworkActor {
                             if let Some(ws) = self.websockets.remove(&id) {
                                 let _ = ws.cancel_tx.send(());
                             }
+                        }
+
+                        Some(NetworkCommand::ExecuteGraphQL { id, endpoint, query, variables, headers, auth }) => {
+                            let response_tx = self.response_tx.clone();
+                            let client = self.client.clone();
+
+                            self.active_requests.spawn(async move {
+                                tracing::info!(id, endpoint = %endpoint, "Executing GraphQL query");
+                                let result = crate::network::client::execute_graphql(
+                                    &client,
+                                    endpoint,
+                                    query,
+                                    variables,
+                                    headers,
+                                    auth,
+                                    id,
+                                ).await;
+                                tracing::info!(id, "GraphQL query completed");
+                                let _ = response_tx.send(result);
+                            });
                         }
 
                         Some(NetworkCommand::Shutdown) => {

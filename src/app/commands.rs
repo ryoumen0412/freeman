@@ -11,48 +11,48 @@
 
 use std::path::PathBuf;
 
-use crate::app::AppState;
 use crate::app::state::{WsDirection, WsLogEntry};
-use crate::models::{AuthType, Header, HistoryEntry, HttpMethod, Request};
+use crate::app::AppState;
+use crate::curl;
+use crate::discovery::{self, detector, openapi, DiscoveredEndpoint};
 use crate::messages::ui_events::{AppTab, AuthField, InputMode, Panel};
 use crate::messages::{NetworkCommand, NetworkResponse};
-use crate::discovery::{self, DiscoveredEndpoint, detector, openapi};
-use crate::curl;
+use crate::models::{AuthType, Header, HistoryEntry, HttpMethod, Request};
 
 impl AppState {
     // ========================
     // Navigation
     // ========================
-    
+
     /// Move focus to the next panel in the tab order.
     /// Panels cycle: Url → Body → Headers → Auth → Workspace → Url
     pub fn next_panel(&mut self) {
         self.active_panel = self.active_panel.next();
     }
-    
+
     /// Move focus to the previous panel in the tab order.
     pub fn prev_panel(&mut self) {
         self.active_panel = self.active_panel.prev();
     }
-    
+
     /// Focus the workspace panel directly.
     pub fn focus_workspace(&mut self) {
         self.active_panel = Panel::Workspace;
     }
-    
+
     // ========================
     // Input editing
     // ========================
-    
+
     pub fn start_editing(&mut self) {
         self.input_mode = InputMode::Editing;
         self.cursor_position = self.current_input().len();
     }
-    
+
     pub fn stop_editing(&mut self) {
         self.input_mode = InputMode::Normal;
     }
-    
+
     pub fn move_cursor_left(&mut self) {
         let input = self.current_input();
         if self.cursor_position > 0 {
@@ -64,7 +64,7 @@ impl AppState {
             self.cursor_position = new_pos;
         }
     }
-    
+
     pub fn move_cursor_right(&mut self) {
         let input = self.current_input();
         if self.cursor_position < input.len() {
@@ -76,7 +76,7 @@ impl AppState {
             self.cursor_position = new_pos;
         }
     }
-    
+
     pub fn enter_char(&mut self, c: char) {
         let cursor_pos = self.cursor_position;
         let input = self.current_input_mut();
@@ -85,7 +85,7 @@ impl AppState {
             self.cursor_position = cursor_pos + c.len_utf8();
         }
     }
-    
+
     pub fn delete_char(&mut self) {
         if self.cursor_position > 0 {
             let cursor_pos = self.cursor_position;
@@ -99,58 +99,59 @@ impl AppState {
             self.cursor_position = prev_pos;
         }
     }
-    
+
     // ========================
     // HTTP Method
     // ========================
-    
+
     pub fn cycle_method(&mut self) {
         if !self.is_loading {
             self.request.method = self.request.method.next();
         }
     }
-    
+
     // ========================
     // Response scrolling
     // ========================
-    
+
     pub fn scroll_up(&mut self) {
         self.response_scroll = self.response_scroll.saturating_sub(1);
     }
-    
+
     pub fn scroll_down(&mut self) {
         self.response_scroll = self.response_scroll.saturating_add(1);
     }
-    
+
     // ========================
     // Headers
     // ========================
-    
+
     pub fn next_header(&mut self) {
         if !self.request.headers.is_empty() {
             self.selected_header = (self.selected_header + 1) % self.request.headers.len();
         }
     }
-    
+
     pub fn prev_header(&mut self) {
         if !self.request.headers.is_empty() {
-            self.selected_header = self.selected_header
+            self.selected_header = self
+                .selected_header
                 .checked_sub(1)
                 .unwrap_or(self.request.headers.len() - 1);
         }
     }
-    
+
     pub fn toggle_header(&mut self) {
         if let Some(header) = self.request.headers.get_mut(self.selected_header) {
             header.enabled = !header.enabled;
         }
     }
-    
+
     pub fn add_header(&mut self) {
         self.request.headers.push(Header::new("X-Custom", "value"));
         self.selected_header = self.request.headers.len() - 1;
     }
-    
+
     pub fn delete_header(&mut self) {
         if !self.request.headers.is_empty() {
             self.request.headers.remove(self.selected_header);
@@ -159,11 +160,11 @@ impl AppState {
             }
         }
     }
-    
+
     // ========================
     // Auth
     // ========================
-    
+
     pub fn cycle_auth(&mut self) {
         self.request.auth = match &self.request.auth {
             AuthType::None => AuthType::Bearer(String::new()),
@@ -175,7 +176,7 @@ impl AppState {
         };
         self.auth_field = AuthField::Token;
     }
-    
+
     pub fn next_auth_field(&mut self) {
         if matches!(self.request.auth, AuthType::Basic { .. }) {
             self.auth_field = match self.auth_field {
@@ -186,11 +187,11 @@ impl AppState {
             self.cursor_position = self.current_input().len();
         }
     }
-    
+
     // ========================
     // History
     // ========================
-    
+
     pub fn history_prev(&mut self) {
         if self.storage.history_len() == 0 {
             return;
@@ -210,7 +211,7 @@ impl AppState {
             }
         }
     }
-    
+
     pub fn history_next(&mut self) {
         if let Some(idx) = self.history_index {
             if idx > 0 {
@@ -227,23 +228,23 @@ impl AppState {
             }
         }
     }
-    
+
     // ========================
     // cURL import/export
     // ========================
-    
+
     pub fn show_curl_import(&mut self) {
         self.show_curl_import = true;
     }
-    
+
     pub fn curl_import_char(&mut self, c: char) {
         self.curl_import_buffer.push(c);
     }
-    
+
     pub fn curl_import_backspace(&mut self) {
         self.curl_import_buffer.pop();
     }
-    
+
     pub fn import_curl(&mut self) {
         if let Ok(request) = curl::parse_curl(&self.curl_import_buffer) {
             self.request = request;
@@ -252,57 +253,58 @@ impl AppState {
         self.curl_import_buffer.clear();
         self.show_curl_import = false;
     }
-    
+
     pub fn cancel_curl_import(&mut self) {
         self.curl_import_buffer.clear();
         self.show_curl_import = false;
     }
-    
+
     pub fn export_curl(&mut self) {
         self.response.body = curl::to_curl(&self.request);
         self.response.status_code = None;
     }
-    
+
     // ========================
     // Help popup
     // ========================
-    
+
     pub fn toggle_help(&mut self) {
         self.show_help = !self.show_help;
     }
-    
+
     pub fn close_help(&mut self) {
         self.show_help = false;
     }
-    
+
     // ========================
     // Workspace
     // ========================
-    
+
     pub fn open_workspace_input(&mut self) {
         self.show_workspace_input = true;
     }
-    
+
     pub fn workspace_path_char(&mut self, c: char) {
         self.workspace_path_input.push(c);
     }
-    
+
     pub fn workspace_path_backspace(&mut self) {
         self.workspace_path_input.pop();
     }
-    
+
     pub fn cancel_workspace_input(&mut self) {
         self.show_workspace_input = false;
         self.workspace_path_input.clear();
     }
-    
+
     pub fn workspace_path_autocomplete(&mut self) {
         use std::fs;
-        
+
         // Expand ~ to home directory
         let input = if self.workspace_path_input.starts_with('~') {
             if let Some(home) = dirs::home_dir() {
-                self.workspace_path_input.replacen("~", &home.to_string_lossy(), 1)
+                self.workspace_path_input
+                    .replacen("~", &home.to_string_lossy(), 1)
             } else {
                 return;
             }
@@ -311,7 +313,7 @@ impl AppState {
         };
 
         let path = PathBuf::from(&input);
-        
+
         // If it's already a valid directory, try to complete further
         if path.is_dir() && !input.ends_with('/') {
             self.workspace_path_input = format!("{}/", input);
@@ -322,7 +324,8 @@ impl AppState {
         let (parent, prefix) = if input.ends_with('/') {
             (PathBuf::from(&input), String::new())
         } else if let Some(parent) = path.parent() {
-            let prefix = path.file_name()
+            let prefix = path
+                .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
             (parent.to_path_buf(), prefix)
@@ -338,9 +341,9 @@ impl AppState {
                 .filter_map(|e| e.file_name().into_string().ok())
                 .filter(|name| name.starts_with(&prefix) && !name.starts_with('.'))
                 .collect();
-            
+
             matches.sort();
-            
+
             if matches.len() == 1 {
                 // Single match - complete it
                 let completed = parent.join(&matches[0]);
@@ -356,10 +359,10 @@ impl AppState {
             }
         }
     }
-    
+
     pub fn load_workspace(&mut self) {
         let path = self.workspace_path_input.clone();
-        
+
         // Expand ~ to home directory
         let expanded = if path.starts_with('~') {
             if let Some(home) = dirs::home_dir() {
@@ -371,7 +374,7 @@ impl AppState {
             path.clone()
         };
         let path_buf = PathBuf::from(&expanded);
-        
+
         // Try to find and parse OpenAPI spec first
         if let Some(spec_path) = detector::find_openapi_spec(&path_buf) {
             match openapi::parse_openapi(&spec_path) {
@@ -389,46 +392,41 @@ impl AppState {
                 }
             }
         }
-        
+
         // Fallback to source code parsing based on detected framework
         let framework = detector::detect_framework(&path_buf);
-        
+
         let project = match framework {
-            discovery::Framework::FastAPI | discovery::Framework::Flask | discovery::Framework::Django => {
+            discovery::Framework::FastAPI
+            | discovery::Framework::Flask
+            | discovery::Framework::Django => {
                 Some(discovery::load_python_project(&path_buf, framework))
             }
-            discovery::Framework::Express => {
-                Some(discovery::load_express_project(&path_buf))
-            }
-            discovery::Framework::NestJS => {
-                Some(discovery::load_nestjs_project(&path_buf))
-            }
-            discovery::Framework::SpringBoot => {
-                Some(discovery::load_java_project(&path_buf))
-            }
-            discovery::Framework::Laravel => {
-                Some(discovery::load_laravel_project(&path_buf))
-            }
+            discovery::Framework::Express => Some(discovery::load_express_project(&path_buf)),
+            discovery::Framework::NestJS => Some(discovery::load_nestjs_project(&path_buf)),
+            discovery::Framework::SpringBoot => Some(discovery::load_java_project(&path_buf)),
+            discovery::Framework::Laravel => Some(discovery::load_laravel_project(&path_buf)),
             _ => None,
         };
-        
+
         if let Some(proj) = project {
             let count = proj.endpoints.len();
             let fw_name = proj.framework.as_str().to_string();
             self.workspace = Some(proj);
             self.selected_endpoint = 0;
-            self.response.body = format!("✓ Loaded {} endpoints from {} source code", count, fw_name);
+            self.response.body =
+                format!("✓ Loaded {} endpoints from {} source code", count, fw_name);
         } else {
             self.response.body = format!(
                 "No supported framework detected in {}\n\nSupported: OpenAPI, FastAPI, Flask, Django, Express.js, NestJS, Spring Boot, Laravel",
                 expanded
             );
         }
-        
+
         self.show_workspace_input = false;
         self.workspace_path_input.clear();
     }
-    
+
     pub fn next_endpoint(&mut self) {
         if let Some(ws) = &self.workspace {
             if !ws.endpoints.is_empty() {
@@ -436,28 +434,31 @@ impl AppState {
             }
         }
     }
-    
+
     pub fn prev_endpoint(&mut self) {
         if let Some(ws) = &self.workspace {
             if !ws.endpoints.is_empty() {
-                self.selected_endpoint = self.selected_endpoint
+                self.selected_endpoint = self
+                    .selected_endpoint
                     .checked_sub(1)
                     .unwrap_or(ws.endpoints.len() - 1);
             }
         }
     }
-    
+
     pub fn select_endpoint(&mut self) {
         // Clone endpoint to avoid borrow conflict
-        let endpoint_opt = self.workspace.as_ref()
+        let endpoint_opt = self
+            .workspace
+            .as_ref()
             .and_then(|ws| ws.endpoints.get(self.selected_endpoint).cloned());
-        
+
         if let Some(endpoint) = endpoint_opt {
             self.load_endpoint(&endpoint);
             self.active_panel = Panel::Url;
         }
     }
-    
+
     fn load_endpoint(&mut self, endpoint: &DiscoveredEndpoint) {
         // Set method
         self.request.method = match endpoint.method.to_uppercase().as_str() {
@@ -470,7 +471,9 @@ impl AppState {
         };
 
         // Set URL (combine base URL with path)
-        let base = self.workspace.as_ref()
+        let base = self
+            .workspace
+            .as_ref()
             .and_then(|w| w.base_url.clone())
             .unwrap_or_else(|| "http://localhost:8000".to_string());
         self.request.url = format!("{}{}", base.trim_end_matches('/'), endpoint.path);
@@ -479,9 +482,9 @@ impl AppState {
         // Set auth
         self.request.auth = match &endpoint.auth {
             discovery::AuthRequirement::Bearer => AuthType::Bearer(String::new()),
-            discovery::AuthRequirement::Basic => AuthType::Basic { 
-                username: String::new(), 
-                password: String::new() 
+            discovery::AuthRequirement::Basic => AuthType::Basic {
+                username: String::new(),
+                password: String::new(),
             },
             _ => AuthType::None,
         };
@@ -494,84 +497,88 @@ impl AppState {
         }
 
         // Clear previous response
-        self.response.body = format!("Loaded: {} {}\n\nAuth: {}", 
-            endpoint.method, endpoint.path, endpoint.auth.as_str());
+        self.response.body = format!(
+            "Loaded: {} {}\n\nAuth: {}",
+            endpoint.method,
+            endpoint.path,
+            endpoint.auth.as_str()
+        );
         self.response.status_code = None;
     }
-    
+
     // ========================
     // Request sending
     // ========================
-    
-    #[allow(dead_code)]  // Reserved for non-streaming mode
+
+    #[allow(dead_code)] // Reserved for non-streaming mode
     pub fn prepare_request(&mut self) -> Option<NetworkCommand> {
         if self.is_loading {
             return None;
         }
-        
+
         self.is_loading = true;
         self.response.body = String::from("Loading...");
         self.response.status_code = None;
-        
+
         let id = self.next_id();
         self.pending_request_id = Some(id);
-        
+
         Some(NetworkCommand::ExecuteRequest {
             id,
             request: self.request.clone(),
             environment: self.storage.current_environment().cloned(),
         })
     }
-    
+
     /// Validate a URL and return error message if invalid
     fn validate_url(&self, url: &str) -> Result<(), String> {
         if url.is_empty() {
             return Err("URL cannot be empty".to_string());
         }
-        
+
         // Check for basic URL structure
         if !url.starts_with("http://") && !url.starts_with("https://") {
             return Err("URL must start with http:// or https://".to_string());
         }
-        
+
         // Check for host
         let without_scheme = url.split("://").nth(1).unwrap_or("");
         if without_scheme.is_empty() || without_scheme.starts_with('/') {
             return Err("URL must contain a host".to_string());
         }
-        
+
         Ok(())
     }
-    
+
     /// Prepare a streaming request (for large responses with incremental updates)
     pub fn prepare_streaming_request(&mut self) -> Option<NetworkCommand> {
         if self.is_loading {
             return None;
         }
-        
+
         // Validate URL before sending
         if let Err(error) = self.validate_url(&self.request.url) {
             self.response.body = format!("Invalid URL: {}", error);
             self.response.status_code = None;
             return None;
         }
-        
+
         self.is_loading = true;
         self.response.body = String::from("Starting request...");
         self.response.status_code = None;
         self.streaming_body.clear();
         self.bytes_received = 0;
-        
+
         let id = self.next_id();
         self.pending_request_id = Some(id);
-        
+
         Some(NetworkCommand::ExecuteStreamingRequest {
             id,
             request: self.request.clone(),
             environment: self.storage.current_environment().cloned(),
         })
     }
-    
+
     /// Cancel the current pending request
     pub fn cancel_request(&mut self) -> Option<NetworkCommand> {
         if let Some(id) = self.pending_request_id {
@@ -580,18 +587,23 @@ impl AppState {
             None
         }
     }
-    
+
     // ========================
     // Response handling
     // ========================
-    
+
     pub fn handle_response(&mut self, response: NetworkResponse) {
         // Only process if it matches the pending request (for HTTP responses)
         let response_id = response.id();
         let is_for_pending = self.pending_request_id == Some(response_id);
-        
+
         match response {
-            NetworkResponse::Success { status, body, time_ms, .. } => {
+            NetworkResponse::Success {
+                status,
+                body,
+                time_ms,
+                ..
+            } => {
                 if is_for_pending {
                     self.response.status_code = Some(status);
                     self.response.body = body;
@@ -599,7 +611,11 @@ impl AppState {
                     self.finalize_request();
                 }
             }
-            NetworkResponse::StreamChunk { chunk, bytes_received, .. } => {
+            NetworkResponse::StreamChunk {
+                chunk,
+                bytes_received,
+                ..
+            } => {
                 if is_for_pending {
                     // Append chunk to streaming body
                     self.streaming_body.push_str(&chunk);
@@ -607,20 +623,27 @@ impl AppState {
                     // Show streaming progress
                     self.response.body = format!(
                         "Streaming... {} bytes received\n\n{}",
-                        bytes_received,
-                        &self.streaming_body
+                        bytes_received, &self.streaming_body
                     );
                 }
             }
-            NetworkResponse::StreamComplete { status, total_bytes, time_ms, .. } => {
+            NetworkResponse::StreamComplete {
+                status,
+                total_bytes,
+                time_ms,
+                ..
+            } => {
                 if is_for_pending {
                     // Format final body as JSON if possible
-                    let formatted = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&self.streaming_body) {
-                        serde_json::to_string_pretty(&json).unwrap_or_else(|_| self.streaming_body.clone())
+                    let formatted = if let Ok(json) =
+                        serde_json::from_str::<serde_json::Value>(&self.streaming_body)
+                    {
+                        serde_json::to_string_pretty(&json)
+                            .unwrap_or_else(|_| self.streaming_body.clone())
                     } else {
                         self.streaming_body.clone()
                     };
-                    
+
                     self.response.status_code = Some(status);
                     self.response.body = formatted;
                     self.response.time_ms = time_ms;
@@ -628,7 +651,9 @@ impl AppState {
                     self.finalize_request();
                 }
             }
-            NetworkResponse::Error { message, time_ms, .. } => {
+            NetworkResponse::Error {
+                message, time_ms, ..
+            } => {
                 if is_for_pending {
                     self.response.status_code = None;
                     self.response.body = message;
@@ -691,41 +716,41 @@ impl AppState {
             }
         }
     }
-    
+
     // ========================
     // Tab navigation
     // ========================
-    
+
     pub fn switch_tab(&mut self, tab: AppTab) {
         self.active_tab = tab;
         self.input_mode = InputMode::Normal;
     }
-    
+
     // ========================
     // WebSocket commands
     // ========================
-    
+
     pub fn ws_connect(&mut self) -> Option<NetworkCommand> {
         if self.ws.connected {
             return None;
         }
-        
+
         let id = self.next_id();
         self.ws.connection_id = Some(id);
-        
+
         // Add system message
         self.ws.messages.push(WsLogEntry {
             direction: WsDirection::System,
             content: format!("Connecting to {}...", self.ws.url),
             timestamp: chrono::Utc::now(),
         });
-        
+
         Some(NetworkCommand::ConnectWebSocket {
             id,
             url: self.ws.url.clone(),
         })
     }
-    
+
     pub fn ws_disconnect(&mut self) -> Option<NetworkCommand> {
         if let Some(id) = self.ws.connection_id {
             self.ws.messages.push(WsLogEntry {
@@ -738,32 +763,32 @@ impl AppState {
             None
         }
     }
-    
+
     pub fn ws_send(&mut self) -> Option<NetworkCommand> {
         if !self.ws.connected || self.ws.input.is_empty() {
             return None;
         }
-        
+
         if let Some(id) = self.ws.connection_id {
             let message = self.ws.input.clone();
-            
+
             // Add to log
             self.ws.messages.push(WsLogEntry {
                 direction: WsDirection::Sent,
                 content: message.clone(),
                 timestamp: chrono::Utc::now(),
             });
-            
+
             // Clear input
             self.ws.input.clear();
             self.ws.cursor_position = 0;
-            
+
             Some(NetworkCommand::SendWebSocketMessage { id, message })
         } else {
             None
         }
     }
-    
+
     pub fn ws_char(&mut self, c: char) {
         if self.ws.editing_url {
             self.ws.url.insert(self.ws.url_cursor, c);
@@ -773,7 +798,7 @@ impl AppState {
             self.ws.cursor_position += 1;
         }
     }
-    
+
     pub fn ws_backspace(&mut self) {
         if self.ws.editing_url {
             if self.ws.url_cursor > 0 {
@@ -787,7 +812,7 @@ impl AppState {
             }
         }
     }
-    
+
     pub fn ws_cursor_left(&mut self) {
         if self.ws.editing_url {
             if self.ws.url_cursor > 0 {
@@ -799,7 +824,7 @@ impl AppState {
             }
         }
     }
-    
+
     pub fn ws_cursor_right(&mut self) {
         if self.ws.editing_url {
             if self.ws.url_cursor < self.ws.url.len() {
@@ -811,20 +836,20 @@ impl AppState {
             }
         }
     }
-    
+
     /// Start editing WS URL
     pub fn ws_start_url_edit(&mut self) {
         self.ws.editing_url = true;
         self.ws.url_cursor = self.ws.url.len();
         self.input_mode = InputMode::Editing;
     }
-    
+
     /// Start editing WS message input
     pub fn ws_start_input_edit(&mut self) {
         self.ws.editing_url = false;
         self.input_mode = InputMode::Editing;
     }
-    
+
     /// Finalize a completed request (add to history, reset state)
     fn finalize_request(&mut self) {
         self.is_loading = false;
@@ -832,7 +857,7 @@ impl AppState {
         self.response_scroll = 0;
         self.streaming_body.clear();
         self.bytes_received = 0;
-        
+
         // Add to history
         let entry = HistoryEntry {
             request: self.request.clone(),
@@ -841,6 +866,215 @@ impl AppState {
         };
         self.storage.add_to_history(entry);
         self.history_index = None;
+    }
+
+    // ========================
+    // GraphQL commands
+    // ========================
+
+    /// Execute a GraphQL query
+    pub fn gql_execute_query(&mut self) -> Option<NetworkCommand> {
+        if self.gql.is_loading {
+            return None;
+        }
+
+        // Validate endpoint
+        if let Err(error) = self.validate_url(&self.gql.endpoint) {
+            self.gql.response = format!("Invalid endpoint: {}", error);
+            return None;
+        }
+
+        self.gql.is_loading = true;
+        self.gql.response = String::from("Executing query...");
+
+        let id = self.next_id();
+        self.gql.pending_request_id = Some(id);
+
+        // Parse variables if not empty
+        let variables = if self.gql.variables.trim().is_empty() || self.gql.variables.trim() == "{}"
+        {
+            None
+        } else {
+            Some(self.gql.variables.clone())
+        };
+
+        Some(NetworkCommand::ExecuteGraphQL {
+            id,
+            endpoint: self.gql.endpoint.clone(),
+            query: self.gql.query.clone(),
+            variables,
+            headers: self.request.headers.clone(),
+            auth: self.request.auth.clone(),
+        })
+    }
+
+    /// Handle GraphQL response
+    #[allow(dead_code)] // Reserved for expanded response handling
+    pub fn handle_gql_response(&mut self, id: u64, _status: u16, body: String, time_ms: u64) {
+        if self.gql.pending_request_id == Some(id) {
+            self.gql.response = body;
+            self.gql.time_ms = time_ms;
+            self.gql.is_loading = false;
+            self.gql.pending_request_id = None;
+        }
+    }
+
+    /// Handle GraphQL error
+    #[allow(dead_code)] // Reserved for expanded error handling
+    pub fn handle_gql_error(&mut self, id: u64, error: String, time_ms: u64) {
+        if self.gql.pending_request_id == Some(id) {
+            self.gql.response = format!("Error: {}", error);
+            self.gql.time_ms = time_ms;
+            self.gql.is_loading = false;
+            self.gql.pending_request_id = None;
+        }
+    }
+
+    /// Start editing GraphQL endpoint
+    pub fn gql_edit_endpoint(&mut self) {
+        use crate::messages::ui_events::GqlField;
+        self.gql.active_field = GqlField::Endpoint;
+        self.gql.endpoint_cursor = self.gql.endpoint.len();
+        self.input_mode = InputMode::Editing;
+    }
+
+    /// Start editing GraphQL query
+    pub fn gql_edit_query(&mut self) {
+        use crate::messages::ui_events::GqlField;
+        self.gql.active_field = GqlField::Query;
+        self.gql.query_cursor = self.gql.query.len();
+        self.input_mode = InputMode::Editing;
+    }
+
+    /// Start editing GraphQL variables
+    pub fn gql_edit_variables(&mut self) {
+        use crate::messages::ui_events::GqlField;
+        self.gql.active_field = GqlField::Variables;
+        self.gql.variables_cursor = self.gql.variables.len();
+        self.input_mode = InputMode::Editing;
+    }
+
+    /// Cycle to next GraphQL field
+    pub fn gql_next_field(&mut self) {
+        use crate::messages::ui_events::GqlField;
+        self.gql.active_field = match self.gql.active_field {
+            GqlField::Endpoint => GqlField::Query,
+            GqlField::Query => GqlField::Variables,
+            GqlField::Variables => GqlField::Endpoint,
+        };
+        // Update cursor position for new field
+        match self.gql.active_field {
+            GqlField::Endpoint => self.gql.endpoint_cursor = self.gql.endpoint.len(),
+            GqlField::Query => self.gql.query_cursor = self.gql.query.len(),
+            GqlField::Variables => self.gql.variables_cursor = self.gql.variables.len(),
+        }
+    }
+
+    /// Insert character into active GraphQL field
+    pub fn gql_char(&mut self, c: char) {
+        use crate::messages::ui_events::GqlField;
+        match self.gql.active_field {
+            GqlField::Endpoint => {
+                let cursor = self.gql.endpoint_cursor;
+                if cursor <= self.gql.endpoint.len() {
+                    self.gql.endpoint.insert(cursor, c);
+                    self.gql.endpoint_cursor += c.len_utf8();
+                }
+            }
+            GqlField::Query => {
+                let cursor = self.gql.query_cursor;
+                if cursor <= self.gql.query.len() {
+                    self.gql.query.insert(cursor, c);
+                    self.gql.query_cursor += c.len_utf8();
+                }
+            }
+            GqlField::Variables => {
+                let cursor = self.gql.variables_cursor;
+                if cursor <= self.gql.variables.len() {
+                    self.gql.variables.insert(cursor, c);
+                    self.gql.variables_cursor += c.len_utf8();
+                }
+            }
+        }
+    }
+
+    /// Delete character from active GraphQL field
+    pub fn gql_backspace(&mut self) {
+        use crate::messages::ui_events::GqlField;
+        match self.gql.active_field {
+            GqlField::Endpoint => {
+                if self.gql.endpoint_cursor > 0 {
+                    self.gql.endpoint_cursor -= 1;
+                    self.gql.endpoint.remove(self.gql.endpoint_cursor);
+                }
+            }
+            GqlField::Query => {
+                if self.gql.query_cursor > 0 {
+                    self.gql.query_cursor -= 1;
+                    self.gql.query.remove(self.gql.query_cursor);
+                }
+            }
+            GqlField::Variables => {
+                if self.gql.variables_cursor > 0 {
+                    self.gql.variables_cursor -= 1;
+                    self.gql.variables.remove(self.gql.variables_cursor);
+                }
+            }
+        }
+    }
+
+    /// Move cursor left in active GraphQL field
+    pub fn gql_cursor_left(&mut self) {
+        use crate::messages::ui_events::GqlField;
+        match self.gql.active_field {
+            GqlField::Endpoint => {
+                if self.gql.endpoint_cursor > 0 {
+                    self.gql.endpoint_cursor -= 1;
+                }
+            }
+            GqlField::Query => {
+                if self.gql.query_cursor > 0 {
+                    self.gql.query_cursor -= 1;
+                }
+            }
+            GqlField::Variables => {
+                if self.gql.variables_cursor > 0 {
+                    self.gql.variables_cursor -= 1;
+                }
+            }
+        }
+    }
+
+    /// Move cursor right in active GraphQL field
+    pub fn gql_cursor_right(&mut self) {
+        use crate::messages::ui_events::GqlField;
+        match self.gql.active_field {
+            GqlField::Endpoint => {
+                if self.gql.endpoint_cursor < self.gql.endpoint.len() {
+                    self.gql.endpoint_cursor += 1;
+                }
+            }
+            GqlField::Query => {
+                if self.gql.query_cursor < self.gql.query.len() {
+                    self.gql.query_cursor += 1;
+                }
+            }
+            GqlField::Variables => {
+                if self.gql.variables_cursor < self.gql.variables.len() {
+                    self.gql.variables_cursor += 1;
+                }
+            }
+        }
+    }
+
+    /// Scroll GraphQL response up
+    pub fn gql_scroll_up(&mut self) {
+        self.gql.response_scroll = self.gql.response_scroll.saturating_sub(1);
+    }
+
+    /// Scroll GraphQL response down
+    pub fn gql_scroll_down(&mut self) {
+        self.gql.response_scroll = self.gql.response_scroll.saturating_add(1);
     }
 }
 
@@ -851,15 +1085,16 @@ fn common_prefix(strings: &[String]) -> Option<String> {
     }
     let first = &strings[0];
     let mut prefix_len = first.len();
-    
+
     for s in &strings[1..] {
-        prefix_len = first.chars()
+        prefix_len = first
+            .chars()
             .zip(s.chars())
             .take_while(|(a, b)| a == b)
             .count()
             .min(prefix_len);
     }
-    
+
     if prefix_len > 0 {
         Some(first[..prefix_len].to_string())
     } else {
@@ -873,124 +1108,127 @@ mod tests {
     use crate::app::AppState;
     use crate::messages::ui_events::Panel;
     use crate::models::HttpMethod;
-    
+
     fn create_test_state() -> AppState {
         AppState::new()
     }
-    
+
     // ========================
     // Navigation tests
     // ========================
-    
+
     #[test]
     fn test_next_panel_cycles_through_panels() {
         let mut state = create_test_state();
         let initial = state.active_panel;
-        
+
         state.next_panel();
         assert_ne!(state.active_panel, initial);
-        
+
         // Cycle through all panels
         for _ in 0..10 {
             state.next_panel();
         }
         // Should eventually return to a valid panel
-        assert!(matches!(state.active_panel, Panel::Url | Panel::Body | Panel::Headers | Panel::Auth | Panel::Workspace));
+        assert!(matches!(
+            state.active_panel,
+            Panel::Url | Panel::Body | Panel::Headers | Panel::Auth | Panel::Workspace
+        ));
     }
-    
+
     #[test]
     fn test_prev_panel_cycles_backwards() {
         let mut state = create_test_state();
         let initial = state.active_panel;
-        
+
         state.prev_panel();
         assert_ne!(state.active_panel, initial);
     }
-    
+
     #[test]
     fn test_focus_workspace() {
         let mut state = create_test_state();
         state.active_panel = Panel::Url;
-        
+
         state.focus_workspace();
-        
+
         assert_eq!(state.active_panel, Panel::Workspace);
     }
-    
+
     // ========================
     // URL validation tests
     // ========================
-    
+
     #[test]
     fn test_validate_url_empty() {
         let state = create_test_state();
         assert!(state.validate_url("").is_err());
     }
-    
+
     #[test]
     fn test_validate_url_no_scheme() {
         let state = create_test_state();
         assert!(state.validate_url("example.com").is_err());
     }
-    
+
     #[test]
     fn test_validate_url_http() {
         let state = create_test_state();
         assert!(state.validate_url("http://example.com").is_ok());
     }
-    
+
     #[test]
     fn test_validate_url_https() {
         let state = create_test_state();
         assert!(state.validate_url("https://api.example.com/users").is_ok());
     }
-    
+
     #[test]
     fn test_validate_url_no_host() {
         let state = create_test_state();
         assert!(state.validate_url("https://").is_err());
     }
-    
+
     // ========================
     // HTTP method tests
     // ========================
-    
+
     #[test]
     fn test_cycle_method() {
         let mut state = create_test_state();
         state.request.method = HttpMethod::GET;
-        
+
         state.cycle_method();
         assert_eq!(state.request.method, HttpMethod::POST);
-        
+
         state.cycle_method();
         assert_eq!(state.request.method, HttpMethod::PUT);
-        
+
         state.cycle_method();
         assert_eq!(state.request.method, HttpMethod::PATCH);
-        
+
         state.cycle_method();
         assert_eq!(state.request.method, HttpMethod::DELETE);
-        
+
         state.cycle_method();
         assert_eq!(state.request.method, HttpMethod::GET);
     }
-    
+
     // ========================
     // Common prefix tests
     // ========================
-    
+
     #[test]
     fn test_common_prefix_empty() {
         assert_eq!(common_prefix(&[]), None);
     }
-    
+
     #[test]
     fn test_common_prefix_single() {
         let strings = vec!["hello".to_string()];
         assert_eq!(common_prefix(&strings), Some("hello".to_string()));
     }
-    
+
     #[test]
     fn test_common_prefix_multiple() {
         let strings = vec![
@@ -999,11 +1237,10 @@ mod tests {
         ];
         assert_eq!(common_prefix(&strings), Some("/home/user/".to_string()));
     }
-    
+
     #[test]
     fn test_common_prefix_no_match() {
         let strings = vec!["abc".to_string(), "xyz".to_string()];
         assert_eq!(common_prefix(&strings), None);
     }
 }
-
