@@ -397,11 +397,10 @@ impl AppState {
         let framework = detector::detect_framework(&path_buf);
 
         let project = match framework {
-            discovery::Framework::FastAPI
-            | discovery::Framework::Flask
-            | discovery::Framework::Django => {
+            discovery::Framework::FastAPI | discovery::Framework::Flask => {
                 Some(discovery::load_python_project(&path_buf, framework))
             }
+            discovery::Framework::Django => Some(discovery::load_django_project(&path_buf)),
             discovery::Framework::Express => Some(discovery::load_express_project(&path_buf)),
             discovery::Framework::NestJS => Some(discovery::load_nestjs_project(&path_buf)),
             discovery::Framework::SpringBoot => Some(discovery::load_java_project(&path_buf)),
