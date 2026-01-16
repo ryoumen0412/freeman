@@ -85,7 +85,7 @@ pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
         let mut in_string = false;
         let mut is_key = false;
         
-        while let Some(c) = chars.next() {
+        for c in chars {
             match c {
                 '"' => {
                     if !current.is_empty() {

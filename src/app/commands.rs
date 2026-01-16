@@ -580,11 +580,7 @@ impl AppState {
 
     /// Cancel the current pending request
     pub fn cancel_request(&mut self) -> Option<NetworkCommand> {
-        if let Some(id) = self.pending_request_id {
-            Some(NetworkCommand::CancelRequest(id))
-        } else {
-            None
-        }
+        self.pending_request_id.map(NetworkCommand::CancelRequest)
     }
 
     // ========================
@@ -804,11 +800,9 @@ impl AppState {
                 self.ws.url_cursor -= 1;
                 self.ws.url.remove(self.ws.url_cursor);
             }
-        } else {
-            if self.ws.cursor_position > 0 {
-                self.ws.cursor_position -= 1;
-                self.ws.input.remove(self.ws.cursor_position);
-            }
+        } else if self.ws.cursor_position > 0 {
+            self.ws.cursor_position -= 1;
+            self.ws.input.remove(self.ws.cursor_position);
         }
     }
 
@@ -817,10 +811,8 @@ impl AppState {
             if self.ws.url_cursor > 0 {
                 self.ws.url_cursor -= 1;
             }
-        } else {
-            if self.ws.cursor_position > 0 {
-                self.ws.cursor_position -= 1;
-            }
+        } else if self.ws.cursor_position > 0 {
+            self.ws.cursor_position -= 1;
         }
     }
 
@@ -829,10 +821,8 @@ impl AppState {
             if self.ws.url_cursor < self.ws.url.len() {
                 self.ws.url_cursor += 1;
             }
-        } else {
-            if self.ws.cursor_position < self.ws.input.len() {
-                self.ws.cursor_position += 1;
-            }
+        } else if self.ws.cursor_position < self.ws.input.len() {
+            self.ws.cursor_position += 1;
         }
     }
 

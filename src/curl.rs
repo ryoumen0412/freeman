@@ -68,7 +68,7 @@ pub fn parse_curl(input: &str) -> Result<Request> {
                 }
                 // Check for Bearer token in Authorization header
                 if token.to_lowercase().starts_with("authorization:") {
-                    let value = token.splitn(2, ':').nth(1).unwrap_or("").trim();
+                    let value = token.split_once(':').map(|x| x.1).unwrap_or("").trim();
                     if value.to_lowercase().starts_with("bearer ") {
                         let token = value[7..].to_string();
                         request.auth = AuthType::Bearer(token);

@@ -18,7 +18,7 @@ pub fn parse_openapi(spec_path: &Path) -> Result<WorkspaceProject> {
     let spec: Value = if spec_path.extension().map(|e| e == "json").unwrap_or(false) {
         serde_json::from_str(&content)?
     } else {
-        serde_yml::from_str(&content)?
+        serde_yaml::from_str(&content)?
     };
 
     let root = spec_path.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -145,7 +145,7 @@ fn extract_security_schemes(spec: &Value) -> Vec<(String, AuthRequirement)> {
 
     if let Some(sec_schemes) = components
         .and_then(|c| c.get("securitySchemes"))
-        .or_else(|| components)
+        .or(components)
         .and_then(|s| s.as_object())
     {
         for (name, scheme) in sec_schemes {
@@ -275,7 +275,7 @@ fn parse_request_body(body: &Value) -> Option<BodySchema> {
             .get("schema")
             .and_then(|s| s.get("$ref"))
             .and_then(|r| r.as_str())
-            .map(|r| r.split('/').last().unwrap_or("").to_string());
+            .map(|r| r.split('/').next_back().unwrap_or("").to_string());
 
         let example = schema_obj
             .get("example")

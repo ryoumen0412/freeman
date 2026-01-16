@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// HTTP Method enum
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum HttpMethod {
     GET,
@@ -38,17 +39,15 @@ impl HttpMethod {
 }
 
 /// Authentication type
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub enum AuthType {
+    #[default]
     None,
     Bearer(String),
-    Basic { username: String, password: String },
-}
-
-impl Default for AuthType {
-    fn default() -> Self {
-        AuthType::None
-    }
+    Basic {
+        username: String,
+        password: String,
+    },
 }
 
 /// HTTP Header
@@ -104,7 +103,7 @@ pub struct Collection {
     pub requests: Vec<Request>,
 }
 
-#[allow(dead_code)]  // Prepared for future collection feature
+#[allow(dead_code)] // Prepared for future collection feature
 impl Collection {
     pub fn new(name: impl Into<String>) -> Self {
         Collection {
@@ -121,7 +120,7 @@ pub struct Environment {
     pub variables: HashMap<String, String>,
 }
 
-#[allow(dead_code)]  // Prepared for future environment feature
+#[allow(dead_code)] // Prepared for future environment feature
 impl Environment {
     pub fn new(name: impl Into<String>) -> Self {
         Environment {
@@ -162,7 +161,7 @@ impl Default for Response {
         Response {
             status_code: None,
             body: String::from(
-r#"Quick Reference:
+                r#"Quick Reference:
 ────────────────────────────
   s     Send request
   m     Change method
@@ -173,7 +172,7 @@ r#"Quick Reference:
   ?     Full help
   q     Quit
 ────────────────────────────
-Press 's' to send your first request!"#
+Press 's' to send your first request!"#,
             ),
             time_ms: 0,
         }
@@ -182,7 +181,7 @@ Press 's' to send your first request!"#
 
 /// History entry
 #[derive(Clone, Debug)]
-#[allow(dead_code)]  // Fields stored for future history display feature
+#[allow(dead_code)] // Fields stored for future history display feature
 pub struct HistoryEntry {
     pub request: Request,
     pub response: Response,
