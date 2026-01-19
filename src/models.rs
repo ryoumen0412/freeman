@@ -77,6 +77,9 @@ pub struct Request {
     pub headers: Vec<Header>,
     pub body: String,
     pub auth: AuthType,
+    /// When true, ignores SSL certificate errors (useful for testing environments)
+    #[serde(default)]
+    pub ignore_ssl_errors: bool,
 }
 
 impl Default for Request {
@@ -92,6 +95,7 @@ impl Default for Request {
             ],
             body: String::new(),
             auth: AuthType::None,
+            ignore_ssl_errors: false,
         }
     }
 }

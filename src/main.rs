@@ -722,12 +722,26 @@ fn draw_response(f: &mut Frame, state: &RenderState, area: Rect) {
 }
 
 fn draw_status_bar(f: &mut Frame, state: &RenderState, area: Rect) {
-    let status = if state.is_loading {
-        " Loading... "
-    } else if state.input_mode == InputMode::Editing {
-        " ESC:stop editing | arrows:move | Tab:next field "
+    use crate::messages::ui_events::AppTab;
+
+    let ssl_warning = if state.active_tab == AppTab::Http && state.ignore_ssl_errors {
+        " [⚠ SSL OFF] "
     } else {
-        " Tab:panel | e:edit | m:method | s:send | ?:help | q:quit "
+        ""
+    };
+
+    let status = if state.is_loading {
+        format!("{}Loading... ", ssl_warning)
+    } else if state.input_mode == InputMode::Editing {
+        format!(
+            "{}ESC:stop editing | arrows:move | Tab:next field ",
+            ssl_warning
+        )
+    } else {
+        format!(
+            "{}Tab:panel | e:edit | m:method | s:send | k:ssl | ?:help | q:quit ",
+            ssl_warning
+        )
     };
 
     let bar = Paragraph::new(status).style(Style::default().fg(Color::DarkGray));

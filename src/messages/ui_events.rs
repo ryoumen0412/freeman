@@ -35,6 +35,7 @@ pub enum UiEvent {
     SendRequest,
     CancelRequest,
     CycleMethod,
+    ToggleSslErrors,
 
     // Headers
     NextHeader,
@@ -272,6 +273,7 @@ fn handle_http_tab_keys(
             KeyCode::Char('a') if active_panel == Panel::Headers => Some(UiEvent::AddHeader),
             KeyCode::Char('d') if active_panel == Panel::Headers => Some(UiEvent::DeleteHeader),
             KeyCode::Char('t') if active_panel == Panel::Auth => Some(UiEvent::CycleAuth),
+            KeyCode::Char('k') => Some(UiEvent::ToggleSslErrors),
             _ => None,
         },
         InputMode::Editing => match key.code {

@@ -235,6 +235,7 @@ impl AppState {
             body: self.request.body.clone(),
             headers: self.request.headers.clone(),
             auth: self.request.auth.clone(),
+            ignore_ssl_errors: self.request.ignore_ssl_errors,
             active_panel: self.active_panel,
             input_mode: self.input_mode,
             cursor_position: self.cursor_position,

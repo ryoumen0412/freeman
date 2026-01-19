@@ -110,6 +110,12 @@ impl AppState {
         }
     }
 
+    /// Toggle whether to ignore SSL certificate errors for this request.
+    /// Useful for testing environments with self-signed certificates.
+    pub fn toggle_ssl_errors(&mut self) {
+        self.request.ignore_ssl_errors = !self.request.ignore_ssl_errors;
+    }
+
     // ========================
     // Response scrolling
     // ========================

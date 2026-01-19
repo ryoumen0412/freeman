@@ -5,7 +5,9 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 
 use crate::messages::{NetworkCommand, NetworkResponse};
-use crate::network::client::{create_client, execute_request, execute_streaming_request};
+use crate::network::client::{
+    create_client, create_insecure_client, execute_request, execute_streaming_request,
+};
 use crate::network::websocket::connect_websocket;
 
 /// Tracks an active request for cancellation
@@ -24,6 +26,8 @@ struct ActiveWebSocket {
 /// Network actor that processes HTTP request and WebSocket commands
 pub struct NetworkActor {
     client: reqwest::Client,
+    /// Client that ignores SSL certificate errors (for testing environments)
+    insecure_client: reqwest::Client,
     response_tx: mpsc::UnboundedSender<NetworkResponse>,
     active_requests: JoinSet<()>,
     cancel_handles: HashMap<u64, ActiveRequest>,
@@ -34,6 +38,7 @@ impl NetworkActor {
     pub fn new(response_tx: mpsc::UnboundedSender<NetworkResponse>) -> Self {
         NetworkActor {
             client: create_client(),
+            insecure_client: create_insecure_client(),
             response_tx,
             active_requests: JoinSet::new(),
             cancel_handles: HashMap::new(),
@@ -52,11 +57,20 @@ impl NetworkActor {
                     match cmd {
                         Some(NetworkCommand::ExecuteRequest { id, request, environment }) => {
                             let response_tx = self.response_tx.clone();
-                            let client = self.client.clone();
+                            // Use insecure client if ignore_ssl_errors is enabled
+                            let client = if request.ignore_ssl_errors {
+                                self.insecure_client.clone()
+                            } else {
+                                self.client.clone()
+                            };
 
                             // Simple buffered request - no cancellation tracking
                             self.active_requests.spawn(async move {
-                                tracing::info!(id, url = %request.url, method = ?request.method, "Executing request");
+                                if request.ignore_ssl_errors {
+                                    tracing::info!(id, url = %request.url, method = ?request.method, "Executing request (SSL errors ignored)");
+                                } else {
+                                    tracing::info!(id, url = %request.url, method = ?request.method, "Executing request");
+                                }
                                 let result = execute_request(&client, request, environment, id).await;
                                 tracing::info!(id, status = ?result.id(), "Request completed");
                                 let _ = response_tx.send(result);
@@ -68,7 +82,12 @@ impl NetworkActor {
                             self.cancel_handles.insert(id, ActiveRequest { cancel_tx });
 
                             let response_tx = self.response_tx.clone();
-                            let client = self.client.clone();
+                            // Use insecure client if ignore_ssl_errors is enabled
+                            let client = if request.ignore_ssl_errors {
+                                self.insecure_client.clone()
+                            } else {
+                                self.client.clone()
+                            };
 
                             self.active_requests.spawn(async move {
                                 execute_streaming_request(

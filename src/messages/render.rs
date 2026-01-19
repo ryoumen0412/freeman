@@ -17,6 +17,8 @@ pub struct RenderState {
     pub body: String,
     pub headers: Vec<Header>,
     pub auth: AuthType,
+    /// Whether SSL certificate errors should be ignored (for testing environments)
+    pub ignore_ssl_errors: bool,
 
     // UI state
     pub active_panel: Panel,
@@ -92,6 +94,7 @@ impl Default for RenderState {
                 Header::new("Accept", "application/json"),
             ],
             auth: AuthType::None,
+            ignore_ssl_errors: false,
             active_panel: Panel::Url,
             input_mode: InputMode::Normal,
             cursor_position: 24,

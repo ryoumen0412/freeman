@@ -75,6 +75,7 @@ impl AppActor {
 
             // Request actions
             UiEvent::CycleMethod => self.state.cycle_method(),
+            UiEvent::ToggleSslErrors => self.state.toggle_ssl_errors(),
             UiEvent::SendRequest => {
                 // Stop editing first if in URL panel
                 if self.state.input_mode == crate::messages::ui_events::InputMode::Editing {

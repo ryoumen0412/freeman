@@ -2,11 +2,112 @@
 
 use base64::Engine;
 use futures_util::StreamExt;
+use std::error::Error;
 use std::time::Instant;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::messages::NetworkResponse;
 use crate::models::{AuthType, Environment, HttpMethod, Request};
+
+/// Format detailed error messages for HTTP request failures
+fn format_request_error(e: &reqwest::Error, url: &str) -> String {
+    let mut lines = Vec::new();
+
+    // Main error classification
+    if e.is_timeout() {
+        lines.push("⏱ TIMEOUT: Request timed out after 30 seconds".to_string());
+        lines.push("  → The server took too long to respond".to_string());
+        lines.push("  → Check if the server is running and accessible".to_string());
+    } else if e.is_connect() {
+        lines.push("🔌 CONNECTION FAILED: Unable to connect to server".to_string());
+
+        // Try to extract more specific connection error info
+        let error_str = e.to_string().to_lowercase();
+
+        if error_str.contains("dns")
+            || error_str.contains("name resolution")
+            || error_str.contains("getaddrinfo")
+        {
+            lines.push("  → DNS resolution failed - hostname not found".to_string());
+            lines.push("  → Verify the hostname is correct".to_string());
+        } else if error_str.contains("refused") || error_str.contains("111") {
+            lines.push("  → Connection refused by the server".to_string());
+            lines.push("  → The server may not be running on this port".to_string());
+        } else if error_str.contains("no route") || error_str.contains("network unreachable") {
+            lines.push("  → Network unreachable".to_string());
+            lines.push("  → Check your network connection".to_string());
+        } else if error_str.contains("reset") {
+            lines.push("  → Connection was reset by the server".to_string());
+            lines.push("  → The server forcibly closed the connection".to_string());
+        } else {
+            lines.push(format!("  → {}", e));
+        }
+    } else if e.is_request() {
+        lines.push("📝 REQUEST ERROR: Failed to build/send request".to_string());
+
+        // Check for specific request issues
+        if e.is_body() {
+            lines.push("  → Problem with request body".to_string());
+        }
+
+        if let Some(source) = e.source() {
+            lines.push(format!("  → {}", source));
+        }
+    } else if e.is_redirect() {
+        lines.push("↪ REDIRECT ERROR: Too many redirects or redirect loop".to_string());
+        lines.push("  → The server redirected too many times".to_string());
+        lines.push("  → Check for redirect loops in server config".to_string());
+    } else if e.is_status() {
+        // This shouldn't normally happen here since we handle status in Ok branch
+        if let Some(status) = e.status() {
+            lines.push(format!("❌ HTTP ERROR: Status {}", status.as_u16()));
+            lines.push(format!(
+                "  → {}",
+                status.canonical_reason().unwrap_or("Unknown")
+            ));
+        }
+    } else if e.is_decode() {
+        lines.push("📦 DECODE ERROR: Failed to decode response".to_string());
+        lines.push("  → Response body could not be parsed".to_string());
+    } else {
+        // Generic error with full details
+        lines.push("❓ REQUEST FAILED".to_string());
+
+        let error_str = e.to_string().to_lowercase();
+
+        // Check for TLS/SSL errors
+        if error_str.contains("ssl")
+            || error_str.contains("tls")
+            || error_str.contains("certificate")
+        {
+            lines.push("  → TLS/SSL error detected".to_string());
+            if error_str.contains("certificate") && error_str.contains("expired") {
+                lines.push("  → Server certificate may be expired".to_string());
+            } else if error_str.contains("self-signed") || error_str.contains("unknown ca") {
+                lines.push("  → Server has an untrusted certificate".to_string());
+            } else if error_str.contains("handshake") {
+                lines.push("  → TLS handshake failed".to_string());
+            }
+        }
+
+        lines.push(format!("  → {}", e));
+    }
+
+    // Add URL info for context
+    lines.push(String::new());
+    lines.push(format!("URL: {}", url));
+
+    // Check for common URL issues
+    if url.starts_with("https://localhost") || url.starts_with("https://127.0.0.1") {
+        lines.push("  ⚠ TIP: Local servers often run on HTTP, not HTTPS".to_string());
+    }
+
+    if !url.contains("://") {
+        lines.push("  ⚠ TIP: URL may be missing the protocol (http:// or https://)".to_string());
+    }
+
+    lines.join("\n")
+}
 
 /// Build a request from the given parameters
 fn build_request(
@@ -111,13 +212,7 @@ pub async fn execute_request(
             }
         }
         Err(e) => {
-            let msg = if e.is_timeout() {
-                "Request timed out (30s)".to_string()
-            } else if e.is_connect() {
-                format!("Connection failed: {}", e)
-            } else {
-                format!("Request failed: {}", e)
-            };
+            let msg = format_request_error(&e, &request.url);
             NetworkResponse::Error {
                 id: request_id,
                 message: msg,
@@ -200,13 +295,7 @@ pub async fn execute_streaming_request(
             }
         }
         Err(e) => {
-            let msg = if e.is_timeout() {
-                "Request timed out (30s)".to_string()
-            } else if e.is_connect() {
-                format!("Connection failed: {}", e)
-            } else {
-                format!("Request failed: {}", e)
-            };
+            let msg = format_request_error(&e, &request.url);
             let _ = response_tx.send(NetworkResponse::Error {
                 id: request_id,
                 message: msg,
@@ -307,13 +396,7 @@ pub async fn execute_graphql(
             }
         }
         Err(e) => {
-            let msg = if e.is_timeout() {
-                "Request timed out (30s)".to_string()
-            } else if e.is_connect() {
-                format!("Connection failed: {}", e)
-            } else {
-                format!("Request failed: {}", e)
-            };
+            let msg = format_request_error(&e, &endpoint);
             NetworkResponse::Error {
                 id: request_id,
                 message: msg,
@@ -329,6 +412,18 @@ pub fn create_client() -> reqwest::Client {
 
     reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
+/// Create an HTTP client that ignores SSL certificate errors
+/// WARNING: Only use for testing environments, not production!
+pub fn create_insecure_client() -> reqwest::Client {
+    use std::time::Duration;
+
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .danger_accept_invalid_certs(true)
         .build()
         .unwrap_or_else(|_| reqwest::Client::new())
 }
