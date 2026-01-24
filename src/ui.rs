@@ -1,10 +1,7 @@
-use ratatui::{
-    prelude::*,
-    widgets::*,
-};
+use ratatui::{prelude::*, widgets::*};
 
 /// Renders a text input field with cursor
-#[allow(dead_code)]  // Prepared for future dynamic input rendering
+#[allow(dead_code)] // Prepared for future dynamic input rendering
 pub fn render_input<'a>(
     content: &'a str,
     title: &'a str,
@@ -26,7 +23,7 @@ pub fn render_input<'a>(
 }
 
 /// Renders a key-value list (for headers)
-#[allow(dead_code)]  // Prepared for future header list rendering
+#[allow(dead_code)] // Prepared for future header list rendering
 pub fn render_key_value_list<'a>(
     items: &'a [(String, String, bool)], // key, value, enabled
     title: &'a str,
@@ -44,7 +41,7 @@ pub fn render_key_value_list<'a>(
             } else {
                 Style::default()
             };
-            
+
             let prefix = if *enabled { "[x]" } else { "[ ]" };
             ListItem::new(format!("{} {}: {}", prefix, key, value)).style(style)
         })
@@ -56,17 +53,18 @@ pub fn render_key_value_list<'a>(
         Style::default()
     };
 
-    List::new(items)
-        .block(Block::default()
+    List::new(items).block(
+        Block::default()
             .borders(Borders::ALL)
             .border_style(border_style)
-            .title(title))
+            .title(title),
+    )
 }
 
 /// Renders tabs
 pub fn render_tabs<'a>(titles: &[&'a str], selected: usize) -> Tabs<'a> {
     let titles: Vec<Line> = titles.iter().map(|t| Line::from(*t)).collect();
-    
+
     Tabs::new(titles)
         .select(selected)
         .style(Style::default().fg(Color::DarkGray))
@@ -75,16 +73,17 @@ pub fn render_tabs<'a>(titles: &[&'a str], selected: usize) -> Tabs<'a> {
 }
 
 /// Simple JSON syntax highlighting
+#[allow(unused_mut, dead_code)]
 pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
-    
+
     for line in text.lines() {
         let mut spans = Vec::new();
         let mut chars = line.chars().peekable();
         let mut current = String::new();
         let mut in_string = false;
         let mut is_key = false;
-        
+
         for c in chars {
             match c {
                 '"' => {
@@ -92,7 +91,7 @@ pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
                         spans.push(Span::raw(current.clone()));
                         current.clear();
                     }
-                    
+
                     if in_string {
                         // End of string
                         current.push(c);
@@ -121,10 +120,17 @@ pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
                         spans.push(Span::raw(current.clone()));
                         current.clear();
                     }
-                    spans.push(Span::styled(c.to_string(), Style::default().fg(Color::Yellow)));
+                    spans.push(Span::styled(
+                        c.to_string(),
+                        Style::default().fg(Color::Yellow),
+                    ));
                 }
                 '0'..='9' | '-' | '.' if !in_string => {
-                    if !current.is_empty() && !current.chars().all(|x| x.is_ascii_digit() || x == '-' || x == '.') {
+                    if !current.is_empty()
+                        && !current
+                            .chars()
+                            .all(|x| x.is_ascii_digit() || x == '-' || x == '.')
+                    {
                         spans.push(Span::raw(current.clone()));
                         current.clear();
                     }
@@ -134,7 +140,10 @@ pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
                     current.push(c);
                     // Check for true, false, null
                     if current == "true" || current == "false" || current == "null" {
-                        spans.push(Span::styled(current.clone(), Style::default().fg(Color::Magenta)));
+                        spans.push(Span::styled(
+                            current.clone(),
+                            Style::default().fg(Color::Magenta),
+                        ));
                         current.clear();
                     }
                 }
@@ -143,19 +152,22 @@ pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
                 }
             }
         }
-        
+
         if !current.is_empty() {
             // Color numbers
-            if current.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '.') {
+            if current
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == '-' || c == '.')
+            {
                 spans.push(Span::styled(current, Style::default().fg(Color::Yellow)));
             } else {
                 spans.push(Span::raw(current));
             }
         }
-        
+
         lines.push(Line::from(spans));
     }
-    
+
     lines
 }
 
