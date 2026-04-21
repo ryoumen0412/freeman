@@ -4,6 +4,7 @@ use ratatui::{prelude::*, widgets::*};
 
 use crate::messages::ui_events::{GqlField, InputMode};
 use crate::messages::RenderState;
+use crate::tui::theme::Theme;
 use crate::tui::widgets::{highlight_json, render_input};
 
 pub fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
@@ -17,6 +18,7 @@ pub fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
         ])
         .split(area);
 
+    let theme = Theme::default();
     let ep_edit = gql.active_field == GqlField::Endpoint && state.input_mode == InputMode::Editing;
     f.render_widget(
         render_input(
@@ -24,7 +26,7 @@ pub fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
             " GraphQL Endpoint (u=edit) ",
             ep_edit,
             true,
-            Color::Green,
+            theme.success,
             false,
         ),
         chunks[0],
@@ -42,7 +44,7 @@ pub fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
             " Query (e=edit) ",
             q_edit,
             true,
-            Color::Green,
+            theme.success,
             true,
         ),
         mid[0],
@@ -55,7 +57,7 @@ pub fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
             " Variables (v=edit) ",
             v_edit,
             true,
-            Color::Green,
+            theme.success,
             true,
         ),
         mid[1],
@@ -68,6 +70,7 @@ pub fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
     };
     let blk = Block::default()
         .borders(Borders::ALL)
+        .padding(Padding::horizontal(1))
         .title(" Response (s=execute, ↑/↓=scroll) ")
         .title_bottom(Line::from(time).right_aligned());
     let lines = highlight_json(&gql.response);

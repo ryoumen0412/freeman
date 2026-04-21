@@ -272,6 +272,7 @@ impl AppState {
                     self.response.status_code = Some(status);
                     self.response.body = body;
                     self.response.time_ms = time_ms;
+                    self.highlighted_response = crate::tui::widgets::highlight_json(&self.response.body);
                     self.finalize_request();
                 }
             }
@@ -312,6 +313,7 @@ impl AppState {
                     self.response.body = formatted;
                     self.response.time_ms = time_ms;
                     self.bytes_received = total_bytes;
+                    self.highlighted_response = crate::tui::widgets::highlight_json(&self.response.body);
                     self.finalize_request();
                 }
             }
@@ -322,6 +324,7 @@ impl AppState {
                     self.response.status_code = None;
                     self.response.body = message;
                     self.response.time_ms = time_ms;
+                    self.highlighted_response = crate::tui::widgets::highlight_json(&self.response.body);
                     self.finalize_request();
                 }
             }
@@ -330,6 +333,7 @@ impl AppState {
                     self.response.status_code = None;
                     self.response.body = String::from("Request cancelled");
                     self.response.time_ms = 0;
+                    self.highlighted_response = crate::tui::widgets::highlight_json(&self.response.body);
                     self.is_loading = false;
                     self.pending_request_id = None;
                     self.streaming_body.clear();

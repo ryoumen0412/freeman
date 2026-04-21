@@ -4,8 +4,8 @@
 //! text inputs, header lists, tab bars, JSON highlighting, and color helpers.
 
 use ratatui::{prelude::*, widgets::*};
-
 use crate::models::Header;
+use crate::tui::theme::Theme;
 
 // ============================================================================
 // Input Widget
@@ -28,12 +28,13 @@ pub fn render_input<'a>(
     base_color: Color,
     wrap: bool,
 ) -> Paragraph<'a> {
+    let theme = Theme::default();
     let border_style = if is_editing {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(theme.border_editing)
     } else if is_focused {
         Style::default().fg(base_color)
     } else {
-        Style::default()
+        Style::default().fg(theme.border_normal)
     };
 
     let block = Block::default()
@@ -63,16 +64,17 @@ pub fn render_header_list<'a>(
     selected: usize,
     is_focused: bool,
 ) -> List<'a> {
+    let theme = Theme::default();
     let items: Vec<ListItem> = headers
         .iter()
         .enumerate()
         .map(|(i, h)| {
             let style = if !h.enabled {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(theme.text_muted)
             } else if is_focused && i == selected {
-                Style::default().fg(Color::Yellow).bold()
+                Style::default().fg(theme.highlight).bold()
             } else {
-                Style::default()
+                Style::default().fg(theme.text_normal)
             };
             let prefix = if h.enabled { "[x]" } else { "[ ]" };
             ListItem::new(format!("{} {}: {}", prefix, h.key, h.value)).style(style)
@@ -80,9 +82,9 @@ pub fn render_header_list<'a>(
         .collect();
 
     let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(theme.border_focus)
     } else {
-        Style::default()
+        Style::default().fg(theme.border_normal)
     };
 
     List::new(items).block(
@@ -99,13 +101,14 @@ pub fn render_header_list<'a>(
 
 /// Renders a tab bar with highlighted selection.
 pub fn render_tabs<'a>(titles: &[&'a str], selected: usize) -> Tabs<'a> {
+    let theme = Theme::default();
     let titles: Vec<Line> = titles.iter().map(|t| Line::from(*t)).collect();
 
     Tabs::new(titles)
         .select(selected)
-        .style(Style::default().fg(Color::DarkGray))
-        .highlight_style(Style::default().fg(Color::Yellow).bold())
-        .divider("|")
+        .style(Style::default().fg(theme.text_muted))
+        .highlight_style(Style::default().fg(theme.text_normal).bg(theme.border_normal))
+        .divider(" | ")
 }
 
 // ============================================================================
@@ -124,12 +127,23 @@ pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
         let mut spans = Vec::new();
         let mut current = String::new();
         let mut in_string = false;
-        let mut is_key = false;
+        let mut escaped = false;
 
-        for c in line.chars() {
+        let mut chars = line.chars().peekable();
+        while let Some(c) = chars.next() {
+            if escaped {
+                current.push(c);
+                escaped = false;
+                continue;
+            }
+
             match c {
+                '\\' if in_string => {
+                    current.push(c);
+                    escaped = true;
+                }
                 '"' => {
-                    if !current.is_empty() {
+                    if !current.is_empty() && !in_string {
                         spans.push(Span::raw(current.clone()));
                         current.clear();
                     }
@@ -137,17 +151,20 @@ pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
                     if in_string {
                         // End of string
                         current.push(c);
+                        
+                        // Look ahead to see if the next non-whitespace char is ':'
+                        let mut lookahead = chars.clone();
+                        let next_char = lookahead.find(|&ch| !ch.is_whitespace());
+                        let is_key = next_char == Some(':');
+
                         let color = if is_key { Color::Cyan } else { Color::Green };
                         spans.push(Span::styled(current.clone(), Style::default().fg(color)));
                         current.clear();
                         in_string = false;
-                        is_key = false;
                     } else {
                         // Start of string
                         in_string = true;
                         current.push(c);
-                        // Check if this is a key (followed by :)
-                        is_key = line[line.find('"').unwrap_or(0)..].contains("\":");
                     }
                 }
                 ':' if !in_string => {

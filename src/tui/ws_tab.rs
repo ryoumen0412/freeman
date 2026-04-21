@@ -4,6 +4,7 @@ use ratatui::{prelude::*, widgets::*};
 
 use crate::messages::ui_events::InputMode;
 use crate::messages::RenderState;
+use crate::tui::theme::Theme;
 use crate::tui::widgets::render_input;
 
 /// Draw the WebSocket tab content.
@@ -26,12 +27,13 @@ pub fn draw_ws_tab(f: &mut Frame, state: &RenderState, area: Rect) {
         " [-] Disconnected"
     };
     let title = format!(" WebSocket{} ", connected_indicator);
+    let theme = Theme::default();
     let url_widget = render_input(
         ws.url.as_str(),
         &title,
         state.input_mode == InputMode::Editing,
         true,
-        Color::Magenta,
+        theme.secondary,
         false,
     );
     f.render_widget(url_widget, chunks[0]);
@@ -45,7 +47,7 @@ pub fn draw_ws_tab(f: &mut Frame, state: &RenderState, area: Rect) {
         " Send Message (e=edit, s=send) ",
         state.input_mode == InputMode::Editing,
         false,
-        Color::White,
+        theme.border_normal,
         false,
     );
     f.render_widget(send_widget, chunks[2]);
@@ -55,16 +57,18 @@ pub fn draw_ws_tab(f: &mut Frame, state: &RenderState, area: Rect) {
 fn draw_messages_log(f: &mut Frame, state: &RenderState, area: Rect) {
     let ws = &state.ws;
 
+    let theme = Theme::default();
     let messages_block = Block::default()
         .borders(Borders::ALL)
+        .padding(Padding::horizontal(1))
         .title(" Messages (↑/↓ scroll) ");
 
     let mut lines: Vec<Line> = Vec::new();
     for entry in &ws.messages {
         let style = match entry.direction {
-            crate::app::state::WsDirection::Sent => Style::default().fg(Color::Cyan),
-            crate::app::state::WsDirection::Received => Style::default().fg(Color::Green),
-            crate::app::state::WsDirection::System => Style::default().fg(Color::Yellow),
+            crate::app::state::WsDirection::Sent => Style::default().fg(theme.primary),
+            crate::app::state::WsDirection::Received => Style::default().fg(theme.success),
+            crate::app::state::WsDirection::System => Style::default().fg(theme.highlight),
         };
         let prefix = match entry.direction {
             crate::app::state::WsDirection::Sent => ">> ",
@@ -80,7 +84,7 @@ fn draw_messages_log(f: &mut Frame, state: &RenderState, area: Rect) {
     if lines.is_empty() {
         lines.push(Line::from(Span::styled(
             "No messages yet. Press 'c' to connect, 's' to send.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         )));
     }
 

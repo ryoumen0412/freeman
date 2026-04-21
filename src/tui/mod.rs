@@ -10,3 +10,4 @@ pub mod http_tab;
 pub mod popups;
 pub mod widgets;
 pub mod ws_tab;
+pub mod theme;

@@ -5,6 +5,7 @@ use crate::messages::ui_events::{AppTab, AuthField, GqlField, InputMode, Panel};
 use crate::messages::RenderState;
 use crate::models::{AuthType, Request, Response};
 use crate::storage::Storage;
+use ratatui::text::Line;
 
 /// Direction of WebSocket message
 #[derive(Clone, Debug)]
@@ -106,6 +107,7 @@ pub struct AppState {
 
     // HTTP Response
     pub response: Response,
+    pub highlighted_response: Vec<Line<'static>>,
     pub is_loading: bool,
     pub next_request_id: u64,
     pub pending_request_id: Option<u64>,
@@ -160,6 +162,7 @@ impl AppState {
             input_mode: InputMode::Normal,
             response_scroll: 0,
             response: Response::default(),
+            highlighted_response: crate::tui::widgets::highlight_json(&Response::default().body),
             is_loading: false,
             next_request_id: 1,
             pending_request_id: None,
@@ -244,6 +247,7 @@ impl AppState {
                 active_panel: self.active_panel,
                 cursor_position: self.cursor_position,
                 response: self.response.clone(),
+                highlighted_response: self.highlighted_response.clone(),
                 response_scroll: self.response_scroll,
                 is_loading: self.is_loading,
                 selected_header: self.selected_header,

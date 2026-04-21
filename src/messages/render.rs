@@ -6,6 +6,7 @@ use crate::app::state::WsLogEntry;
 use crate::discovery::WorkspaceProject;
 use crate::messages::ui_events::{AppTab, AuthField, GqlField, InputMode, Panel};
 use crate::models::{AuthType, Header, HttpMethod, Response};
+use ratatui::text::Line;
 
 /// Complete state needed by the UI to render.
 ///
@@ -44,6 +45,7 @@ pub struct HttpRenderState {
 
     // Response
     pub response: Response,
+    pub highlighted_response: Vec<Line<'static>>,
     pub response_scroll: u16,
     pub is_loading: bool,
 
@@ -124,6 +126,7 @@ impl Default for HttpRenderState {
             active_panel: Panel::Url,
             cursor_position: 24,
             response: Response::default(),
+            highlighted_response: crate::tui::widgets::highlight_json(&Response::default().body),
             response_scroll: 0,
             is_loading: false,
             selected_header: 0,

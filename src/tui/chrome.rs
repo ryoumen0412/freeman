@@ -4,25 +4,27 @@ use ratatui::{prelude::*, widgets::*};
 
 use crate::messages::ui_events::{AppTab, InputMode};
 use crate::messages::RenderState;
+use crate::tui::theme::Theme;
 
 /// Draw the application tab bar (HTTP / WebSocket / GraphQL).
 pub fn draw_tab_bar(f: &mut Frame, state: &RenderState, area: Rect) {
+    let theme = Theme::default();
     let tabs = vec![
         Span::styled(
             " 1:HTTP ",
             if state.active_tab == AppTab::Http {
-                Style::default().fg(Color::Black).bg(Color::Cyan).bold()
+                Style::default().fg(Color::Black).bg(theme.primary).bold()
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(theme.text_muted)
             },
         ),
         Span::raw(" "),
         Span::styled(
             " 2:WebSocket ",
             if state.active_tab == AppTab::WebSocket {
-                Style::default().fg(Color::Black).bg(Color::Magenta).bold()
+                Style::default().fg(Color::Black).bg(theme.secondary).bold()
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(theme.text_muted)
             },
         ),
         Span::styled(
@@ -33,9 +35,9 @@ pub fn draw_tab_bar(f: &mut Frame, state: &RenderState, area: Rect) {
         Span::styled(
             " 3:GraphQL ",
             if state.active_tab == AppTab::GraphQL {
-                Style::default().fg(Color::Black).bg(Color::Green).bold()
+                Style::default().fg(Color::Black).bg(theme.success).bold()
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(theme.text_muted)
             },
         ),
         Span::styled(
@@ -70,7 +72,8 @@ pub fn draw_status_bar(f: &mut Frame, state: &RenderState, area: Rect) {
         )
     };
 
-    let bar = Paragraph::new(status).style(Style::default().fg(Color::DarkGray));
+    let theme = Theme::default();
+    let bar = Paragraph::new(status).style(Style::default().fg(theme.text_muted));
     f.render_widget(bar, area);
 }
 

@@ -3,11 +3,12 @@
 use ratatui::{prelude::*, widgets::*};
 
 use crate::discovery::AuthRequirement;
-use crate::messages::ui_events::{InputMode, Panel};
+use crate::messages::ui_events::{InputMode, Panel, AuthField};
 use crate::messages::RenderState;
 use crate::models::AuthType;
+use crate::tui::theme::Theme;
 use crate::tui::widgets::{
-    highlight_json, method_color, render_header_list, render_input, render_tabs, status_color,
+    method_color, render_header_list, render_input, render_tabs, status_color,
 };
 
 /// Draw the HTTP tab content.
@@ -35,12 +36,13 @@ fn draw_url_bar(f: &mut Frame, state: &RenderState, area: Rect) {
     let is_focused = http.active_panel == Panel::Url;
     let mcolor = method_color(http.method.as_str());
 
+    let theme = Theme::default();
     let border_style = if is_focused && state.input_mode == InputMode::Editing {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(theme.border_editing)
     } else if is_focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(theme.border_focus)
     } else {
-        Style::default()
+        Style::default().fg(theme.border_normal)
     };
 
     let loading = if http.is_loading { " [...]" } else { "" };
@@ -60,13 +62,23 @@ fn draw_url_bar(f: &mut Frame, state: &RenderState, area: Rect) {
         ))
         .title_style(Style::default().fg(mcolor).bold());
 
-    let input = Paragraph::new(http.url.as_str()).block(block);
+    // Cursor and scroll
+    let text_before_cursor = &http.url[..http.cursor_position.min(http.url.len())];
+    let cursor_col_idx = text_before_cursor.chars().count() as u16;
+    let max_visible_cols = area.width.saturating_sub(2);
+    let scroll_x = if cursor_col_idx >= max_visible_cols {
+        cursor_col_idx - max_visible_cols + 1
+    } else {
+        0
+    };
+
+    let input = Paragraph::new(http.url.as_str())
+        .block(block)
+        .scroll((0, scroll_x));
     f.render_widget(input, area);
 
-    // Cursor
     if is_focused && state.input_mode == InputMode::Editing {
-        let max_x = area.x + area.width.saturating_sub(2);
-        let cursor_x = (area.x + http.cursor_position as u16 + 1).min(max_x);
+        let cursor_x = area.x + 1 + cursor_col_idx - scroll_x;
         f.set_cursor_position(Position::new(cursor_x, area.y + 1));
     }
 }
@@ -135,13 +147,41 @@ fn draw_body_panel(f: &mut Frame, state: &RenderState, area: Rect) {
         ""
     };
 
-    let widget = render_input(content, title, is_editing, is_focused, Color::Cyan, true);
+    let max_visible_lines = area.height.saturating_sub(2);
+    let max_visible_cols = area.width.saturating_sub(2);
+    let mut scroll_x = 0;
+    let mut scroll_y = 0;
+    let mut cursor_col_idx = 0;
+    let mut cursor_line_idx = 0;
+
+    if is_editing && http.method.has_body() {
+        let text_before_cursor = &content[..http.cursor_position.min(content.len())];
+        cursor_line_idx = text_before_cursor.chars().filter(|&c| c == '\n').count() as u16;
+        let last_line = text_before_cursor.split('\n').last().unwrap_or("");
+        cursor_col_idx = last_line.chars().count() as u16;
+
+        scroll_y = if cursor_line_idx >= max_visible_lines {
+            cursor_line_idx - max_visible_lines + 1
+        } else {
+            0
+        };
+
+        scroll_x = if cursor_col_idx >= max_visible_cols {
+            cursor_col_idx - max_visible_cols + 1
+        } else {
+            0
+        };
+    }
+
+    let theme = Theme::default();
+    let widget = render_input(content, title, is_editing, is_focused, theme.border_focus, !is_editing)
+        .scroll((scroll_y, scroll_x));
     f.render_widget(widget, area);
 
     if is_editing && http.method.has_body() {
-        let max_x = area.x + area.width.saturating_sub(2);
-        let cursor_x = (area.x + http.cursor_position as u16 + 1).min(max_x);
-        f.set_cursor_position(Position::new(cursor_x, area.y + 1));
+        let cursor_x = area.x + 1 + cursor_col_idx - scroll_x;
+        let cursor_y = area.y + 1 + cursor_line_idx - scroll_y;
+        f.set_cursor_position(Position::new(cursor_x, cursor_y));
     }
 }
 
@@ -168,12 +208,13 @@ fn draw_headers_panel(f: &mut Frame, state: &RenderState, area: Rect) {
 fn draw_auth_panel(f: &mut Frame, state: &RenderState, area: Rect) {
     let http = &state.http;
     let is_focused = http.active_panel == Panel::Auth;
+    let theme = Theme::default();
     let border_style = if is_focused && state.input_mode == InputMode::Editing {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(theme.border_editing)
     } else if is_focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(theme.border_focus)
     } else {
-        Style::default()
+        Style::default().fg(theme.border_normal)
     };
 
     let (auth_type, content) = match &http.auth {
@@ -211,12 +252,39 @@ fn draw_auth_panel(f: &mut Frame, state: &RenderState, area: Rect) {
         .border_style(border_style)
         .title(format!(" Auth: {} (t:cycle) ", auth_type));
 
-    let auth = Paragraph::new(content).block(block);
+    // Scrolling for Auth input
+    let (input_content, scroll_x) = if is_focused && state.input_mode == InputMode::Editing {
+        let current_input = match &http.auth {
+            AuthType::Bearer(token) => token,
+            AuthType::Basic { username, password } => {
+                match http.auth_field {
+                    AuthField::Username => username,
+                    AuthField::Password => password,
+                    _ => "",
+                }
+            }
+            _ => "",
+        };
+        let text_before_cursor = &current_input[..http.cursor_position.min(current_input.len())];
+        let cursor_col = text_before_cursor.chars().count() as u16;
+        let max_cols = area.width.saturating_sub(2);
+        let sx = if cursor_col >= max_cols { cursor_col - max_cols + 1 } else { 0 };
+        (current_input, sx)
+    } else {
+        ("", 0)
+    };
+
+    let auth = Paragraph::new(content)
+        .block(block)
+        .scroll((0, scroll_x));
     f.render_widget(auth, area);
 
     if is_focused && state.input_mode == InputMode::Editing {
-        let max_x = area.x + area.width.saturating_sub(2);
-        let cursor_x = (area.x + http.cursor_position as u16 + 1).min(max_x);
+        let text_before_cursor = &input_content[..http.cursor_position.min(input_content.len())];
+        let cursor_col = text_before_cursor.chars().count() as u16;
+        let cursor_x = area.x + 1 + cursor_col - scroll_x;
+        // Basic auth has two fields, but we only draw one cursor. 
+        // We assume it's roughly on the first line for now as auth forms aren't multi-line.
         f.set_cursor_position(Position::new(cursor_x, area.y + 1));
     }
 }
@@ -228,10 +296,11 @@ fn draw_auth_panel(f: &mut Frame, state: &RenderState, area: Rect) {
 fn draw_workspace_panel(f: &mut Frame, state: &RenderState, area: Rect) {
     let http = &state.http;
     let is_focused = http.active_panel == Panel::Workspace;
+    let theme = Theme::default();
     let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(theme.border_focus)
     } else {
-        Style::default()
+        Style::default().fg(theme.border_normal)
     };
 
     match &http.workspace {
@@ -274,7 +343,7 @@ fn draw_workspace_panel(f: &mut Frame, state: &RenderState, area: Rect) {
                 .collect();
 
             let highlight_style = if is_focused {
-                Style::default().fg(Color::Yellow).bold()
+                Style::default().fg(theme.highlight).bold()
             } else {
                 Style::default()
             };
@@ -315,10 +384,11 @@ fn draw_workspace_panel(f: &mut Frame, state: &RenderState, area: Rect) {
 fn draw_response(f: &mut Frame, state: &RenderState, area: Rect) {
     let http = &state.http;
     let is_focused = http.active_panel == Panel::Response;
+    let theme = Theme::default();
     let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(theme.border_focus)
     } else {
-        Style::default()
+        Style::default().fg(theme.border_normal)
     };
 
     let status_text = match http.response.status_code {
@@ -338,12 +408,12 @@ fn draw_response(f: &mut Frame, state: &RenderState, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border_style)
+        .padding(Padding::horizontal(1))
         .title(status_text)
         .title_bottom(Line::from(time_text).right_aligned());
 
-    // Use syntax highlighting for JSON
-    let lines = highlight_json(&http.response.body);
-    let response = Paragraph::new(lines)
+    // Use cached syntax highlighting for JSON
+    let response = Paragraph::new(http.highlighted_response.clone())
         .block(block)
         .wrap(Wrap { trim: false })
         .scroll((http.response_scroll, 0));

@@ -2,6 +2,7 @@
 
 use crate::messages::RenderState;
 use crate::tui::chrome::centered_rect;
+use crate::tui::theme::Theme;
 use ratatui::{prelude::*, widgets::*};
 
 pub fn draw_help_popup(f: &mut Frame, area: Rect) {
@@ -36,8 +37,11 @@ pub fn draw_help_popup(f: &mut Frame, area: Rect) {
 
  Press any key to close...
 "#;
+    let theme = Theme::default();
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.border_focus))
+        .padding(Padding::horizontal(1))
         .title(" Help ")
         .style(Style::default().bg(Color::Black));
     let help = Paragraph::new(help_text)
@@ -49,8 +53,11 @@ pub fn draw_help_popup(f: &mut Frame, area: Rect) {
 
 pub fn draw_curl_import_popup(f: &mut Frame, state: &RenderState, area: Rect) {
     let popup_area = centered_rect(80, 30, area);
+    let theme = Theme::default();
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.border_focus))
+        .padding(Padding::horizontal(1))
         .title(" Import cURL (Enter to import, Esc to cancel) ")
         .style(Style::default().bg(Color::Black));
     let content = if state.http.curl_import_buffer.is_empty() {
@@ -67,8 +74,11 @@ pub fn draw_curl_import_popup(f: &mut Frame, state: &RenderState, area: Rect) {
 
 pub fn draw_workspace_input_popup(f: &mut Frame, state: &RenderState, area: Rect) {
     let popup_area = centered_rect(60, 20, area);
+    let theme = Theme::default();
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.border_focus))
+        .padding(Padding::horizontal(1))
         .title(" 📂 Open Workspace (Enter to load, Esc to cancel) ")
         .style(Style::default().bg(Color::Black));
     let content = if state.http.workspace_path_input.is_empty() {
