@@ -1,4 +1,4 @@
-# Freeman TUI 🦀
+# Freeman TUI
 
 [![Crates.io](https://img.shields.io/crates/v/freeman-tui.svg)](https://crates.io/crates/freeman-tui)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -8,13 +8,13 @@ Built for developers who find Postman too bloated and cURL too barebones.
 
 It provides a seamless, keyboard-driven interface to explore, test, and manage REST, GraphQL, and WebSocket APIs directly from your terminal.
 
-## ✨ Features
+## Features
 
 - **Blazing Fast TUI:** Built with `ratatui` and `crossterm` for a responsive, zero-lag experience.
 - **Multi-Protocol Support:**
-  - 🌐 **HTTP/REST:** Full control over methods, headers, auth (Bearer/Basic), and body.
-  - ⚡ **WebSockets:** Real-time bi-directional messaging with live connection logs.
-  - 📊 **GraphQL:** Native support for executing queries and managing variables.
+  - **HTTP/REST:** Full control over methods, headers, auth (Bearer/Basic), and body.
+  - **WebSockets:** Real-time bi-directional messaging with live connection logs.
+  - **GraphQL:** Native support for executing queries and managing variables.
 - **Auto-Discovery (Workspaces):** Automatically detects and parses API endpoints directly from your source code or OpenAPI specs.
   - *Supported: OpenAPI, FastAPI, Flask, Django, Express.js, NestJS, Spring Boot, Laravel.*
 - **cURL Integration:** Seamlessly import cURL commands to instantly populate requests, or export your current request to a cURL string.
@@ -22,14 +22,14 @@ It provides a seamless, keyboard-driven interface to explore, test, and manage R
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Option 1: Using Cargo (Recommended)
 
 If you have Rust installed, you can simply pull the crate from crates.io:
 
 ```bash
-cargo install freeman-tui
+cargo install freeman
 ```
 
 ### Option 2: Build from Source
@@ -43,14 +43,14 @@ cargo build --release
 
 ---
 
-## 📖 Usage
+## Usage
 
 Run the application:
 ```bash
-freeman-tui
+freeman
 ```
 
-### 🧭 Navigation & Core Controls
+### Navigation & Core Controls
 
 Freeman is fully keyboard-driven. The interface is split into three main tabs:
 
@@ -63,7 +63,7 @@ Freeman is fully keyboard-driven. The interface is split into three main tabs:
 | `?` | Toggle Help Menu |
 | `Ctrl+C` | Quit Application |
 
-### 🌐 HTTP Tab
+### HTTP Tab
 
 | Key | Action |
 |-----|--------|
@@ -75,7 +75,7 @@ Freeman is fully keyboard-driven. The interface is split into three main tabs:
 | `c` | Export current request as a cURL command |
 | `Esc` | Stop editing |
 
-### ⚡ WebSocket Tab
+### WebSocket Tab
 
 | Key | Action |
 |-----|--------|
@@ -85,7 +85,7 @@ Freeman is fully keyboard-driven. The interface is split into three main tabs:
 | `s` | Send message |
 | `d` | Disconnect |
 
-### 📊 GraphQL Tab
+### GraphQL Tab
 
 | Key | Action |
 |-----|--------|
@@ -96,7 +96,7 @@ Freeman is fully keyboard-driven. The interface is split into three main tabs:
 
 ---
 
-## 🛠️ Workspace Auto-Discovery
+## Workspace Auto-Discovery
 
 Freeman can scan your local project directories and automatically extract available API endpoints.
 
@@ -107,12 +107,12 @@ Freeman can scan your local project directories and automatically extract availa
 
 ---
 
-## 📜 License
+## License
 
 This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. See the [LICENSE](LICENSE) file for more details.
 
-## 💡 Philosophy (Why Freeman?)
+## Philosophy
 
-*Do whatever you want with this code. I built this using my poor, lacking knowledge of Rust and TUI, and because I hate Postman, and cURL is not nearly enough.*
+*Do whatever you want with this code (except earning money). I built this using my poor, lacking knowledge of Rust and TUI, and because I hate Postman... and cURL is not nearly enough. God bless Opus 4.6.*
 
-Contributions, issues, and feature requests are always welcome!
+Contributions, issues, and feature requests are **almost** always welcome!

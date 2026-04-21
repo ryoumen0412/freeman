@@ -389,7 +389,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "freeman-tui"
+name = "freeman"
 version = "0.1.0"
 dependencies = [
  "anyhow",
