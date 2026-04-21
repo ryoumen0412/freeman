@@ -368,8 +368,9 @@ fn infer_methods_from_context(line: &str, path: &str) -> Vec<String> {
 fn find_function_name(lines: &[&str], decorator_line: usize) -> Option<String> {
     let func_re = Regex::new(r"^\s*(?:async\s+)?def\s+(\w+)").unwrap();
 
-    for i in (decorator_line + 1)..lines.len().min(decorator_line + 5) {
-        if let Some(caps) = func_re.captures(lines[i]) {
+    let end = lines.len().min(decorator_line + 5);
+    for &line in &lines[(decorator_line + 1)..end] {
+        if let Some(caps) = func_re.captures(line) {
             return caps.get(1).map(|m| m.as_str().to_string());
         }
     }
@@ -382,9 +383,8 @@ fn find_class_http_methods(lines: &[&str], class_line: usize) -> Vec<String> {
     let mut methods = Vec::new();
 
     // Look through class body (next ~50 lines or until next class/function at indent 0)
-    for i in (class_line + 1)..lines.len().min(class_line + 50) {
-        let line = lines[i];
-
+    let end = lines.len().min(class_line + 50);
+    for &line in &lines[(class_line + 1)..end] {
         // Stop if we hit another top-level definition
         if line.starts_with("class ") || line.starts_with("def ") || line.starts_with("@") {
             break;

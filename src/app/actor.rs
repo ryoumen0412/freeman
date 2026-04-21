@@ -31,7 +31,9 @@ impl AppActor {
         mut net_rx: mpsc::UnboundedReceiver<NetworkResponse>,
     ) {
         // Send initial render state
-        let _ = self.render_tx.send(std::sync::Arc::new(self.state.to_render_state()));
+        let _ = self
+            .render_tx
+            .send(std::sync::Arc::new(self.state.to_render_state()));
 
         loop {
             tokio::select! {

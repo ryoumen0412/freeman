@@ -1,7 +1,7 @@
 //! Data models for discovered endpoints and workspace projects
 
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// Detected API framework
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -16,7 +16,7 @@ pub enum Framework {
     Actix,
     Axum,
     Gin,
-    OpenAPI,  // From spec file
+    OpenAPI, // From spec file
     Unknown,
 }
 
@@ -140,9 +140,10 @@ impl DiscoveredEndpoint {
     }
 
     /// Returns display title for the endpoint
-    #[allow(dead_code)]  // Prepared for future endpoint display feature
+    #[allow(dead_code)] // Prepared for future endpoint display feature
     pub fn display_title(&self) -> String {
-        self.summary.clone()
+        self.summary
+            .clone()
             .or_else(|| self.operation_id.clone())
             .unwrap_or_else(|| self.path.clone())
     }
@@ -150,7 +151,7 @@ impl DiscoveredEndpoint {
 
 /// A workspace project with discovered endpoints
 #[derive(Clone, Debug)]
-#[allow(dead_code)]  // Some fields stored for future features
+#[allow(dead_code)] // Some fields stored for future features
 pub struct WorkspaceProject {
     /// Project root directory
     pub root: PathBuf,
@@ -179,7 +180,7 @@ impl WorkspaceProject {
     }
 
     /// Get endpoints grouped by first path segment or tags
-    #[allow(dead_code)]  // Prepared for future grouped endpoints view
+    #[allow(dead_code)] // Prepared for future grouped endpoints view
     pub fn grouped_endpoints(&self) -> Vec<(String, Vec<&DiscoveredEndpoint>)> {
         use std::collections::BTreeMap;
         let mut groups: BTreeMap<String, Vec<&DiscoveredEndpoint>> = BTreeMap::new();
@@ -189,7 +190,8 @@ impl WorkspaceProject {
                 endpoint.tags[0].clone()
             } else {
                 // Extract first path segment
-                endpoint.path
+                endpoint
+                    .path
                     .trim_start_matches('/')
                     .split('/')
                     .next()

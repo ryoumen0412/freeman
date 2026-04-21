@@ -1,6 +1,6 @@
+use crate::app::state::{WsDirection, WsLogEntry};
 use crate::app::AppState;
 use crate::curl;
-use crate::app::state::{WsDirection, WsLogEntry};
 use crate::messages::ui_events::AuthField;
 use crate::messages::{NetworkCommand, NetworkResponse};
 use crate::models::{AuthType, Header, HistoryEntry, Request};
@@ -384,7 +384,6 @@ impl AppState {
     // ========================
     // Tab navigation
     // ========================
-
 
     /// Finalize a completed request (add to history, reset state)
     pub(crate) fn finalize_request(&mut self) {

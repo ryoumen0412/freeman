@@ -1,8 +1,8 @@
 //! Framework auto-detection from project files
 
-use std::path::Path;
-use std::fs;
 use crate::discovery::models::Framework;
+use std::fs;
+use std::path::Path;
 
 /// Detect the API framework used in a project directory
 pub fn detect_framework(project_root: &Path) -> Framework {
@@ -95,7 +95,7 @@ pub fn find_openapi_spec(root: &Path) -> Option<std::path::PathBuf> {
 fn detect_python_framework(root: &Path) -> Option<Framework> {
     // Check standard files
     let files_to_check = ["requirements.txt", "pyproject.toml", "setup.py", "Pipfile"];
-    
+
     for file in &files_to_check {
         let path = root.join(file);
         if let Ok(content) = fs::read_to_string(&path) {
@@ -136,10 +136,10 @@ fn detect_python_framework(root: &Path) -> Option<Framework> {
 /// Detect Node.js framework from package.json
 fn detect_node_framework(root: &Path) -> Option<Framework> {
     let package_json = root.join("package.json");
-    
+
     if let Ok(content) = fs::read_to_string(&package_json) {
         let lower = content.to_lowercase();
-        
+
         if lower.contains("@nestjs") {
             return Some(Framework::NestJS);
         }
@@ -154,10 +154,10 @@ fn detect_node_framework(root: &Path) -> Option<Framework> {
 /// Detect Rust framework from Cargo.toml
 fn detect_rust_framework(root: &Path) -> Option<Framework> {
     let cargo_toml = root.join("Cargo.toml");
-    
+
     if let Ok(content) = fs::read_to_string(&cargo_toml) {
         let lower = content.to_lowercase();
-        
+
         if lower.contains("actix-web") {
             return Some(Framework::Actix);
         }
@@ -184,7 +184,7 @@ fn detect_java_framework(root: &Path) -> Option<Framework> {
             return Some(Framework::SpringBoot);
         }
     }
-    
+
     // Check Kotlin Gradle
     if let Ok(content) = fs::read_to_string(root.join("build.gradle.kts")) {
         if content.contains("org.springframework.boot") {
@@ -215,7 +215,7 @@ fn detect_php_framework(root: &Path) -> Option<Framework> {
 /// Detect Go framework from go.mod
 fn detect_go_framework(root: &Path) -> Option<Framework> {
     let go_mod = root.join("go.mod");
-    
+
     if let Ok(content) = fs::read_to_string(&go_mod) {
         if content.contains("github.com/gin-gonic/gin") {
             return Some(Framework::Gin);

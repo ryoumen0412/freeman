@@ -1,9 +1,9 @@
-use crate::models::AuthType;
-use std::path::PathBuf;
 use crate::app::AppState;
 use crate::discovery::{self, detector, openapi, DiscoveredEndpoint};
 use crate::messages::ui_events::Panel;
+use crate::models::AuthType;
 use crate::models::HttpMethod;
+use std::path::PathBuf;
 
 impl AppState {
     // ========================
@@ -238,7 +238,6 @@ impl AppState {
     // ========================
     // Request sending
     // ========================
-
 }
 
 /// Find common prefix among strings
@@ -264,4 +263,3 @@ pub(crate) fn common_prefix(strings: &[String]) -> Option<String> {
         None
     }
 }
-

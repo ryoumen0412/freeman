@@ -18,7 +18,17 @@ pub fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
         .split(area);
 
     let ep_edit = gql.active_field == GqlField::Endpoint && state.input_mode == InputMode::Editing;
-    f.render_widget(render_input(gql.endpoint.as_str(), " GraphQL Endpoint (u=edit) ", ep_edit, true, Color::Green, false), chunks[0]);
+    f.render_widget(
+        render_input(
+            gql.endpoint.as_str(),
+            " GraphQL Endpoint (u=edit) ",
+            ep_edit,
+            true,
+            Color::Green,
+            false,
+        ),
+        chunks[0],
+    );
 
     let mid = Layout::default()
         .direction(Direction::Horizontal)
@@ -26,13 +36,46 @@ pub fn draw_gql_tab(f: &mut Frame, state: &RenderState, area: Rect) {
         .split(chunks[1]);
 
     let q_edit = gql.active_field == GqlField::Query && state.input_mode == InputMode::Editing;
-    f.render_widget(render_input(gql.query.as_str(), " Query (e=edit) ", q_edit, true, Color::Green, true), mid[0]);
+    f.render_widget(
+        render_input(
+            gql.query.as_str(),
+            " Query (e=edit) ",
+            q_edit,
+            true,
+            Color::Green,
+            true,
+        ),
+        mid[0],
+    );
 
     let v_edit = gql.active_field == GqlField::Variables && state.input_mode == InputMode::Editing;
-    f.render_widget(render_input(gql.variables.as_str(), " Variables (v=edit) ", v_edit, true, Color::Green, true), mid[1]);
+    f.render_widget(
+        render_input(
+            gql.variables.as_str(),
+            " Variables (v=edit) ",
+            v_edit,
+            true,
+            Color::Green,
+            true,
+        ),
+        mid[1],
+    );
 
-    let time = if gql.time_ms > 0 { format!(" {}ms ", gql.time_ms) } else { String::new() };
-    let blk = Block::default().borders(Borders::ALL).title(" Response (s=execute, ↑/↓=scroll) ").title_bottom(Line::from(time).right_aligned());
+    let time = if gql.time_ms > 0 {
+        format!(" {}ms ", gql.time_ms)
+    } else {
+        String::new()
+    };
+    let blk = Block::default()
+        .borders(Borders::ALL)
+        .title(" Response (s=execute, ↑/↓=scroll) ")
+        .title_bottom(Line::from(time).right_aligned());
     let lines = highlight_json(&gql.response);
-    f.render_widget(Paragraph::new(lines).block(blk).wrap(Wrap { trim: false }).scroll((gql.response_scroll, 0)), chunks[2]);
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(blk)
+            .wrap(Wrap { trim: false })
+            .scroll((gql.response_scroll, 0)),
+        chunks[2],
+    );
 }

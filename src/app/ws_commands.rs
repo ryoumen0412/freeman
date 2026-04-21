@@ -1,5 +1,5 @@
-use crate::app::AppState;
 use crate::app::state::{WsDirection, WsLogEntry};
+use crate::app::AppState;
 use crate::messages::ui_events::InputMode;
 use crate::messages::NetworkCommand;
 
@@ -121,5 +121,4 @@ impl AppState {
         self.ws.editing_url = false;
         self.input_mode = InputMode::Editing;
     }
-
 }

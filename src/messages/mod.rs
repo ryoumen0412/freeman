@@ -2,10 +2,10 @@
 //!
 //! This module defines all messages that flow between the UI, App, and Network layers.
 
-pub mod ui_events;
 pub mod network;
 pub mod render;
+pub mod ui_events;
 
-pub use ui_events::UiEvent;
 pub use network::{NetworkCommand, NetworkResponse};
 pub use render::RenderState;
+pub use ui_events::UiEvent;

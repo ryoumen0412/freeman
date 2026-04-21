@@ -9,7 +9,6 @@
 //! - **Workspace**: Project discovery and endpoint loading
 //! - **WebSocket**: Connection and message handling
 
-
 use crate::app::AppState;
 use crate::messages::ui_events::{AppTab, InputMode, Panel};
 
@@ -108,5 +107,4 @@ impl AppState {
         self.active_tab = tab;
         self.input_mode = InputMode::Normal;
     }
-
 }

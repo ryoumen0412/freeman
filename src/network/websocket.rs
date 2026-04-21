@@ -34,14 +34,14 @@ pub async fn connect_websocket(
     loop {
         tokio::select! {
             biased;
-            
+
             // Check for cancellation/close request
             _ = &mut cancel_rx => {
                 let _ = write.close().await;
                 let _ = response_tx.send(NetworkResponse::WebSocketClosed { id });
                 return;
             }
-            
+
             // Handle outgoing messages
             Some(msg) = message_rx.recv() => {
                 if let Err(e) = write.send(Message::Text(msg)).await {
@@ -52,7 +52,7 @@ pub async fn connect_websocket(
                     return;
                 }
             }
-            
+
             // Handle incoming messages
             msg = read.next() => {
                 match msg {
