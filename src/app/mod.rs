@@ -6,6 +6,10 @@
 pub mod state;
 pub mod actor;
 pub mod commands;
+pub mod http_commands;
+pub mod ws_commands;
+pub mod gql_commands;
+pub mod workspace_commands;
 
 pub use state::AppState;
 pub use actor::AppActor;

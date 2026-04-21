@@ -9,13 +9,13 @@ use crate::messages::{NetworkCommand, NetworkResponse, RenderState, UiEvent};
 pub struct AppActor {
     state: AppState,
     network_tx: mpsc::UnboundedSender<NetworkCommand>,
-    render_tx: mpsc::UnboundedSender<RenderState>,
+    render_tx: mpsc::UnboundedSender<std::sync::Arc<RenderState>>,
 }
 
 impl AppActor {
     pub fn new(
         network_tx: mpsc::UnboundedSender<NetworkCommand>,
-        render_tx: mpsc::UnboundedSender<RenderState>,
+        render_tx: mpsc::UnboundedSender<std::sync::Arc<RenderState>>,
     ) -> Self {
         AppActor {
             state: AppState::new(),
@@ -31,7 +31,7 @@ impl AppActor {
         mut net_rx: mpsc::UnboundedReceiver<NetworkResponse>,
     ) {
         // Send initial render state
-        let _ = self.render_tx.send(self.state.to_render_state());
+        let _ = self.render_tx.send(std::sync::Arc::new(self.state.to_render_state()));
 
         loop {
             tokio::select! {
@@ -41,11 +41,11 @@ impl AppActor {
                         let _ = self.network_tx.send(NetworkCommand::Shutdown);
                         break;
                     }
-                    let _ = self.render_tx.send(self.state.to_render_state());
+                    let _ = self.render_tx.send(std::sync::Arc::new(self.state.to_render_state()));
                 }
                 Some(response) = net_rx.recv() => {
                     self.state.handle_response(response);
-                    let _ = self.render_tx.send(self.state.to_render_state());
+                    let _ = self.render_tx.send(std::sync::Arc::new(self.state.to_render_state()));
                 }
                 else => break,
             }

@@ -21,6 +21,7 @@
 pub mod models;
 pub mod storage;
 pub mod ui;
+pub mod tui;
 pub mod curl;
 pub mod discovery;
 pub mod messages;

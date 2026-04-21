@@ -11,7 +11,7 @@ A terminal-based API testing tool written in Rust.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/freeman.git
+git clone https://github.com/ryumen0412/freeman.git
 cd freeman
 
 # Build release version
