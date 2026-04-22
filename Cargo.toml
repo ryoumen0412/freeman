@@ -43,6 +43,7 @@ futures-util = "0.3"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
 tracing-appender = "0.2.4"
+terminal-colorsaurus = "0.4"
 
 [dev-dependencies]
 tempfile = "3.15"

@@ -1,6 +1,9 @@
 //! Design tokens and centralized theme for the TUI.
 
 use ratatui::style::Color;
+use std::sync::OnceLock;
+
+pub static GLOBAL_THEME: OnceLock<Theme> = OnceLock::new();
 
 /// Centralized design tokens for the application.
 #[derive(Debug, Clone, Copy)]
@@ -20,6 +23,13 @@ pub struct Theme {
 
 impl Default for Theme {
     fn default() -> Self {
+        *GLOBAL_THEME.get_or_init(Theme::dark)
+    }
+}
+
+#[allow(dead_code)]
+impl Theme {
+    pub fn dark() -> Self {
         Self {
             primary: Color::Cyan,
             secondary: Color::Blue,
@@ -33,10 +43,22 @@ impl Default for Theme {
             highlight: Color::Yellow,
         }
     }
-}
 
-#[allow(dead_code)]
-impl Theme {
+    pub fn light() -> Self {
+        Self {
+            primary: Color::Blue,
+            secondary: Color::Magenta,
+            border_normal: Color::Gray,
+            border_focus: Color::Blue,
+            border_editing: Color::LightMagenta,
+            text_muted: Color::DarkGray,
+            text_normal: Color::Black,
+            error: Color::Red,
+            success: Color::Rgb(0, 128, 0),
+            highlight: Color::Yellow,
+        }
+    }
+
     /// Helper to get the correct border color based on focus and editing state.
     pub fn input_border(&self, is_focused: bool, is_editing: bool) -> Color {
         if is_editing {

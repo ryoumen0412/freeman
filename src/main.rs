@@ -29,6 +29,8 @@ use app::AppActor;
 use messages::ui_events::key_to_ui_event;
 use messages::{NetworkCommand, NetworkResponse, RenderState, UiEvent};
 use network::NetworkActor;
+use terminal_colorsaurus::{color_scheme, QueryOptions, ColorScheme};
+use tui::theme::{Theme, GLOBAL_THEME};
 
 /// Terminal cleanup guard
 struct TerminalGuard;
@@ -58,6 +60,13 @@ async fn main() -> anyhow::Result<()> {
         let _ = execute!(io::stdout(), LeaveAlternateScreen);
         default_hook(panic_info);
     }));
+
+    // Detect terminal theme (light/dark)
+    let detected_theme = match color_scheme(QueryOptions::default()) {
+        Ok(ColorScheme::Light) => Theme::light(),
+        _ => Theme::dark(),
+    };
+    let _ = GLOBAL_THEME.set(detected_theme);
 
     // Terminal setup
     enable_raw_mode()?;
