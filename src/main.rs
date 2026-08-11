@@ -1,5 +1,5 @@
 //! Freeman TUI - Actor-based API testing tool
-//!
+//! GPLv3
 //! Architecture:
 //! - UI Layer (Ratatui) - synchronous terminal rendering
 //! - App Layer - central state machine processing events
@@ -29,7 +29,7 @@ use app::AppActor;
 use messages::ui_events::key_to_ui_event;
 use messages::{NetworkCommand, NetworkResponse, RenderState, UiEvent};
 use network::NetworkActor;
-use terminal_colorsaurus::{color_scheme, QueryOptions, ColorScheme};
+use terminal_colorsaurus::{color_scheme, ColorScheme, QueryOptions};
 use tui::theme::{Theme, GLOBAL_THEME};
 
 /// Terminal cleanup guard
