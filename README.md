@@ -25,15 +25,32 @@ It provides a seamless, keyboard-driven interface to explore, test, and manage R
 
 ## Installation
 
-### Option 1: Using Cargo (Recommended)
+### Option 1: Quick Install Script (Linux & macOS)
 
-If you have Rust installed, you can simply pull the crate from crates.io:
+Install the pre-compiled binary directly to `/usr/local/bin` or `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ryoumen0412/freeman/main/install.sh | sh
+```
+
+### Option 2: Using Cargo
+
+If you have Rust installed, pull directly from crates.io:
 
 ```bash
 cargo install freeman
 ```
 
-### Option 2: Build from Source
+### Option 3: Using Docker
+
+Run Freeman inside an isolated lightweight Docker container:
+
+```bash
+docker build -t freeman .
+docker run -it freeman
+```
+
+### Option 4: Build from Source
 
 ```bash
 git clone https://github.com/ryoumen0412/freeman.git

@@ -1,0 +1,8 @@
+target/
+.git/
+.github/
+.vscode/
+*.log
+install.sh
+Dockerfile
+README.md
