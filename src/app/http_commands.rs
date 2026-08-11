@@ -295,7 +295,7 @@ impl AppState {
                     // Show streaming progress
                     self.response.body = format!(
                         "Streaming... {} bytes received\n\n{}",
-                        bytes_received, &self.streaming_body
+                        bytes_received, self.streaming_body
                     );
                 }
             }
