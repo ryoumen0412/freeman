@@ -1,9 +1,10 @@
 # Freeman TUI
 
-[![Crates.io](https://img.shields.io/crates/v/freeman-tui.svg)](https://crates.io/crates/freeman-tui)
+[![Crates.io](https://img.shields.io/crates/v/freeman.svg)](https://crates.io/crates/freeman)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-**Freeman** is a blazing-fast, terminal-based API testing tool written in Rust. 
+**Freeman** is a blazing-fast, terminal-based API testing tool written in Rust.
+
 Built for developers who find Postman too bloated and cURL too barebones.
 
 It provides a seamless, keyboard-driven interface to explore, test, and manage REST, GraphQL, and WebSocket APIs directly from your terminal.
@@ -46,6 +47,7 @@ cargo build --release
 ## Usage
 
 Run the application:
+
 ```bash
 freeman
 ```

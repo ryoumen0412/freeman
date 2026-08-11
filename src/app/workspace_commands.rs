@@ -135,6 +135,12 @@ impl AppState {
             discovery::Framework::NestJS => Some(discovery::load_nestjs_project(&path_buf)),
             discovery::Framework::SpringBoot => Some(discovery::load_java_project(&path_buf)),
             discovery::Framework::Laravel => Some(discovery::load_laravel_project(&path_buf)),
+            discovery::Framework::Actix | discovery::Framework::Axum => {
+                Some(discovery::load_rust_project(&path_buf, framework))
+            }
+            discovery::Framework::Gin => {
+                Some(discovery::load_go_project(&path_buf, framework))
+            }
             _ => None,
         };
 
@@ -147,7 +153,7 @@ impl AppState {
                 format!("✓ Loaded {} endpoints from {} source code", count, fw_name);
         } else {
             self.response.body = format!(
-                "No supported framework detected in {}\n\nSupported: OpenAPI, FastAPI, Flask, Django, Express.js, NestJS, Spring Boot, Laravel",
+                "No supported framework detected in {}\n\nSupported: OpenAPI, FastAPI, Flask, Django, Express.js, NestJS, Spring Boot, Laravel, Actix Web, Axum, Gin",
                 expanded
             );
         }
