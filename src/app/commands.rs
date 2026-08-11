@@ -48,49 +48,24 @@ impl AppState {
 
     pub fn move_cursor_left(&mut self) {
         let input = self.current_input();
-        if self.cursor_position > 0 {
-            let new_pos = input[..self.cursor_position]
-                .char_indices()
-                .last()
-                .map(|(i, _)| i)
-                .unwrap_or(0);
-            self.cursor_position = new_pos;
-        }
+        self.cursor_position = crate::app::text_utils::prev_char_boundary(input, self.cursor_position);
     }
 
     pub fn move_cursor_right(&mut self) {
         let input = self.current_input();
-        if self.cursor_position < input.len() {
-            let new_pos = input[self.cursor_position..]
-                .char_indices()
-                .nth(1)
-                .map(|(i, _)| self.cursor_position + i)
-                .unwrap_or(input.len());
-            self.cursor_position = new_pos;
-        }
+        self.cursor_position = crate::app::text_utils::next_char_boundary(input, self.cursor_position);
     }
 
     pub fn enter_char(&mut self, c: char) {
         let cursor_pos = self.cursor_position;
         let input = self.current_input_mut();
-        if cursor_pos <= input.len() {
-            input.insert(cursor_pos, c);
-            self.cursor_position = cursor_pos + c.len_utf8();
-        }
+        self.cursor_position = crate::app::text_utils::insert_char(input, cursor_pos, c);
     }
 
     pub fn delete_char(&mut self) {
-        if self.cursor_position > 0 {
-            let cursor_pos = self.cursor_position;
-            let input = self.current_input_mut();
-            let prev_pos = input[..cursor_pos]
-                .char_indices()
-                .last()
-                .map(|(i, _)| i)
-                .unwrap_or(0);
-            input.remove(prev_pos);
-            self.cursor_position = prev_pos;
-        }
+        let cursor_pos = self.cursor_position;
+        let input = self.current_input_mut();
+        self.cursor_position = crate::app::text_utils::delete_char_before(input, cursor_pos);
     }
 
     // ========================

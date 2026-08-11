@@ -58,7 +58,7 @@ impl Storage {
     }
 
     /// Ensure config directory exists
-    #[allow(dead_code)] // Used by save methods
+    #[allow(dead_code)]
     fn ensure_dir(&self) -> Result<()> {
         if !self.config_dir.exists() {
             fs::create_dir_all(&self.config_dir)?;
@@ -67,7 +67,7 @@ impl Storage {
     }
 
     /// Save a collection to file
-    #[allow(dead_code)] // Prepared for future collection persistence
+    #[allow(dead_code)]
     pub fn save_collection(&self, collection: &Collection) -> Result<()> {
         self.ensure_dir()?;
         let path = self.config_dir.join(format!("{}.yaml", collection.name));
@@ -76,8 +76,16 @@ impl Storage {
         Ok(())
     }
 
+    /// Add a collection and persist to disk
+    #[allow(dead_code)]
+    pub fn add_collection(&mut self, collection: Collection) -> Result<()> {
+        self.save_collection(&collection)?;
+        self.collections.push(collection);
+        Ok(())
+    }
+
     /// Save an environment to file
-    #[allow(dead_code)] // Prepared for future environment persistence
+    #[allow(dead_code)]
     pub fn save_environment(&self, environment: &Environment) -> Result<()> {
         self.ensure_dir()?;
         let path = self
@@ -85,6 +93,14 @@ impl Storage {
             .join(format!("{}.env.yaml", environment.name));
         let content = serde_yaml::to_string(environment)?;
         fs::write(path, content)?;
+        Ok(())
+    }
+
+    /// Add an environment and persist to disk
+    #[allow(dead_code)]
+    pub fn add_environment(&mut self, environment: Environment) -> Result<()> {
+        self.save_environment(&environment)?;
+        self.environments.push(environment);
         Ok(())
     }
 

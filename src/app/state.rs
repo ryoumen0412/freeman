@@ -144,6 +144,8 @@ pub struct AppState {
 
     // GraphQL state
     pub gql: GraphQLState,
+    // Dummy input fallback to avoid mutating URL accidentally
+    pub dummy_input: String,
 }
 
 impl Default for AppState {
@@ -181,6 +183,7 @@ impl AppState {
             show_workspace_input: false,
             ws: WebSocketState::default(),
             gql: GraphQLState::default(),
+            dummy_input: String::new(),
         }
     }
 
@@ -218,14 +221,14 @@ impl AppState {
                 AuthType::Bearer(token) => token,
                 AuthType::Basic { username, password } => {
                     match self.auth_field {
-                        AuthField::Token => &mut self.request.url, // fallback
+                        AuthField::Token => &mut self.dummy_input,
                         AuthField::Username => username,
                         AuthField::Password => password,
                     }
                 }
-                AuthType::None => &mut self.request.url, // fallback
+                AuthType::None => &mut self.dummy_input,
             },
-            _ => &mut self.request.url, // fallback
+            _ => &mut self.dummy_input,
         }
     }
 

@@ -242,6 +242,7 @@ pub async fn execute_streaming_request(
             let mut stream = resp.bytes_stream();
             let mut total_bytes = 0usize;
             let mut body = String::new();
+            let mut utf8_buffer = Vec::<u8>::new();
 
             loop {
                 tokio::select! {
@@ -255,13 +256,38 @@ pub async fn execute_streaming_request(
                         match chunk {
                             Some(Ok(bytes)) => {
                                 total_bytes += bytes.len();
-                                if let Ok(text) = String::from_utf8(bytes.to_vec()) {
-                                    body.push_str(&text);
-                                    let _ = response_tx.send(NetworkResponse::StreamChunk {
-                                        id: request_id,
-                                        chunk: text,
-                                        bytes_received: total_bytes,
-                                    });
+                                utf8_buffer.extend_from_slice(&bytes);
+
+                                match std::str::from_utf8(&utf8_buffer) {
+                                    Ok(valid_str) => {
+                                        let chunk_text = valid_str.to_string();
+                                        body.push_str(&chunk_text);
+                                        utf8_buffer.clear();
+                                        if !chunk_text.is_empty() {
+                                            let _ = response_tx.send(NetworkResponse::StreamChunk {
+                                                id: request_id,
+                                                chunk: chunk_text,
+                                                bytes_received: total_bytes,
+                                            });
+                                        }
+                                    }
+                                    Err(e) => {
+                                        let valid_up_to = e.valid_up_to();
+                                        if valid_up_to > 0 {
+                                            if let Ok(valid_str) = std::str::from_utf8(&utf8_buffer[..valid_up_to]) {
+                                                let chunk_text = valid_str.to_string();
+                                                body.push_str(&chunk_text);
+                                                utf8_buffer.drain(..valid_up_to);
+                                                if !chunk_text.is_empty() {
+                                                    let _ = response_tx.send(NetworkResponse::StreamChunk {
+                                                        id: request_id,
+                                                        chunk: chunk_text,
+                                                        bytes_received: total_bytes,
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             Some(Err(e)) => {
@@ -273,9 +299,15 @@ pub async fn execute_streaming_request(
                                 return;
                             }
                             None => {
+                                // Flush any remaining bytes
+                                if !utf8_buffer.is_empty() {
+                                    body.push_str(&String::from_utf8_lossy(&utf8_buffer));
+                                    utf8_buffer.clear();
+                                }
+
                                 // Stream complete - try to format as JSON
                                 let formatted = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-                                    serde_json::to_string_pretty(&json).unwrap_or(body)
+                                    serde_json::to_string_pretty(&json).unwrap_or_else(|_| body.clone())
                                 } else {
                                     body
                                 };

@@ -69,43 +69,37 @@ impl AppState {
 
     pub fn ws_char(&mut self, c: char) {
         if self.ws.editing_url {
-            self.ws.url.insert(self.ws.url_cursor, c);
-            self.ws.url_cursor += 1;
+            let cursor = self.ws.url_cursor;
+            self.ws.url_cursor = crate::app::text_utils::insert_char(&mut self.ws.url, cursor, c);
         } else {
-            self.ws.input.insert(self.ws.cursor_position, c);
-            self.ws.cursor_position += 1;
+            let cursor = self.ws.cursor_position;
+            self.ws.cursor_position = crate::app::text_utils::insert_char(&mut self.ws.input, cursor, c);
         }
     }
 
     pub fn ws_backspace(&mut self) {
         if self.ws.editing_url {
-            if self.ws.url_cursor > 0 {
-                self.ws.url_cursor -= 1;
-                self.ws.url.remove(self.ws.url_cursor);
-            }
-        } else if self.ws.cursor_position > 0 {
-            self.ws.cursor_position -= 1;
-            self.ws.input.remove(self.ws.cursor_position);
+            let cursor = self.ws.url_cursor;
+            self.ws.url_cursor = crate::app::text_utils::delete_char_before(&mut self.ws.url, cursor);
+        } else {
+            let cursor = self.ws.cursor_position;
+            self.ws.cursor_position = crate::app::text_utils::delete_char_before(&mut self.ws.input, cursor);
         }
     }
 
     pub fn ws_cursor_left(&mut self) {
         if self.ws.editing_url {
-            if self.ws.url_cursor > 0 {
-                self.ws.url_cursor -= 1;
-            }
-        } else if self.ws.cursor_position > 0 {
-            self.ws.cursor_position -= 1;
+            self.ws.url_cursor = crate::app::text_utils::prev_char_boundary(&self.ws.url, self.ws.url_cursor);
+        } else {
+            self.ws.cursor_position = crate::app::text_utils::prev_char_boundary(&self.ws.input, self.ws.cursor_position);
         }
     }
 
     pub fn ws_cursor_right(&mut self) {
         if self.ws.editing_url {
-            if self.ws.url_cursor < self.ws.url.len() {
-                self.ws.url_cursor += 1;
-            }
-        } else if self.ws.cursor_position < self.ws.input.len() {
-            self.ws.cursor_position += 1;
+            self.ws.url_cursor = crate::app::text_utils::next_char_boundary(&self.ws.url, self.ws.url_cursor);
+        } else {
+            self.ws.cursor_position = crate::app::text_utils::next_char_boundary(&self.ws.input, self.ws.cursor_position);
         }
     }
 

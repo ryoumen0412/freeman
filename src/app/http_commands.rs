@@ -260,6 +260,7 @@ impl AppState {
         // Only process if it matches the pending request (for HTTP responses)
         let response_id = response.id();
         let is_for_pending = self.pending_request_id == Some(response_id);
+        let is_for_gql = self.gql.pending_request_id == Some(response_id);
 
         match response {
             NetworkResponse::Success {
@@ -274,6 +275,11 @@ impl AppState {
                     self.response.time_ms = time_ms;
                     self.highlighted_response = crate::tui::widgets::highlight_json(&self.response.body);
                     self.finalize_request();
+                } else if is_for_gql {
+                    self.gql.response = body;
+                    self.gql.time_ms = time_ms;
+                    self.gql.is_loading = false;
+                    self.gql.pending_request_id = None;
                 }
             }
             NetworkResponse::StreamChunk {
@@ -326,6 +332,11 @@ impl AppState {
                     self.response.time_ms = time_ms;
                     self.highlighted_response = crate::tui::widgets::highlight_json(&self.response.body);
                     self.finalize_request();
+                } else if is_for_gql {
+                    self.gql.response = message;
+                    self.gql.time_ms = time_ms;
+                    self.gql.is_loading = false;
+                    self.gql.pending_request_id = None;
                 }
             }
             NetworkResponse::Cancelled { .. } => {

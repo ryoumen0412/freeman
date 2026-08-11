@@ -240,26 +240,7 @@ impl AppState {
     // ========================
 }
 
-/// Find common prefix among strings
+/// Find common prefix among strings (UTF-8 safe)
 pub(crate) fn common_prefix(strings: &[String]) -> Option<String> {
-    if strings.is_empty() {
-        return None;
-    }
-    let first = &strings[0];
-    let mut prefix_len = first.len();
-
-    for s in &strings[1..] {
-        prefix_len = first
-            .chars()
-            .zip(s.chars())
-            .take_while(|(a, b)| a == b)
-            .count()
-            .min(prefix_len);
-    }
-
-    if prefix_len > 0 {
-        Some(first[..prefix_len].to_string())
-    } else {
-        None
-    }
+    crate::app::text_utils::safe_common_prefix(strings)
 }

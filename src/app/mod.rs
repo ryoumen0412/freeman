@@ -8,8 +8,10 @@ pub mod commands;
 pub mod gql_commands;
 pub mod http_commands;
 pub mod state;
+pub mod text_utils;
 pub mod workspace_commands;
 pub mod ws_commands;
 
 pub use actor::AppActor;
 pub use state::AppState;
+
