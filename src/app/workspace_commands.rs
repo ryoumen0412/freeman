@@ -138,9 +138,7 @@ impl AppState {
             discovery::Framework::Actix | discovery::Framework::Axum => {
                 Some(discovery::load_rust_project(&path_buf, framework))
             }
-            discovery::Framework::Gin => {
-                Some(discovery::load_go_project(&path_buf, framework))
-            }
+            discovery::Framework::Gin => Some(discovery::load_go_project(&path_buf, framework)),
             _ => None,
         };
 

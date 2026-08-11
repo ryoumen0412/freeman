@@ -111,15 +111,18 @@ impl AppState {
         match self.gql.active_field {
             GqlField::Endpoint => {
                 let cursor = self.gql.endpoint_cursor;
-                self.gql.endpoint_cursor = crate::app::text_utils::insert_char(&mut self.gql.endpoint, cursor, c);
+                self.gql.endpoint_cursor =
+                    crate::app::text_utils::insert_char(&mut self.gql.endpoint, cursor, c);
             }
             GqlField::Query => {
                 let cursor = self.gql.query_cursor;
-                self.gql.query_cursor = crate::app::text_utils::insert_char(&mut self.gql.query, cursor, c);
+                self.gql.query_cursor =
+                    crate::app::text_utils::insert_char(&mut self.gql.query, cursor, c);
             }
             GqlField::Variables => {
                 let cursor = self.gql.variables_cursor;
-                self.gql.variables_cursor = crate::app::text_utils::insert_char(&mut self.gql.variables, cursor, c);
+                self.gql.variables_cursor =
+                    crate::app::text_utils::insert_char(&mut self.gql.variables, cursor, c);
             }
         }
     }
@@ -130,15 +133,18 @@ impl AppState {
         match self.gql.active_field {
             GqlField::Endpoint => {
                 let cursor = self.gql.endpoint_cursor;
-                self.gql.endpoint_cursor = crate::app::text_utils::delete_char_before(&mut self.gql.endpoint, cursor);
+                self.gql.endpoint_cursor =
+                    crate::app::text_utils::delete_char_before(&mut self.gql.endpoint, cursor);
             }
             GqlField::Query => {
                 let cursor = self.gql.query_cursor;
-                self.gql.query_cursor = crate::app::text_utils::delete_char_before(&mut self.gql.query, cursor);
+                self.gql.query_cursor =
+                    crate::app::text_utils::delete_char_before(&mut self.gql.query, cursor);
             }
             GqlField::Variables => {
                 let cursor = self.gql.variables_cursor;
-                self.gql.variables_cursor = crate::app::text_utils::delete_char_before(&mut self.gql.variables, cursor);
+                self.gql.variables_cursor =
+                    crate::app::text_utils::delete_char_before(&mut self.gql.variables, cursor);
             }
         }
     }
@@ -148,13 +154,22 @@ impl AppState {
         use crate::messages::ui_events::GqlField;
         match self.gql.active_field {
             GqlField::Endpoint => {
-                self.gql.endpoint_cursor = crate::app::text_utils::prev_char_boundary(&self.gql.endpoint, self.gql.endpoint_cursor);
+                self.gql.endpoint_cursor = crate::app::text_utils::prev_char_boundary(
+                    &self.gql.endpoint,
+                    self.gql.endpoint_cursor,
+                );
             }
             GqlField::Query => {
-                self.gql.query_cursor = crate::app::text_utils::prev_char_boundary(&self.gql.query, self.gql.query_cursor);
+                self.gql.query_cursor = crate::app::text_utils::prev_char_boundary(
+                    &self.gql.query,
+                    self.gql.query_cursor,
+                );
             }
             GqlField::Variables => {
-                self.gql.variables_cursor = crate::app::text_utils::prev_char_boundary(&self.gql.variables, self.gql.variables_cursor);
+                self.gql.variables_cursor = crate::app::text_utils::prev_char_boundary(
+                    &self.gql.variables,
+                    self.gql.variables_cursor,
+                );
             }
         }
     }
@@ -164,13 +179,22 @@ impl AppState {
         use crate::messages::ui_events::GqlField;
         match self.gql.active_field {
             GqlField::Endpoint => {
-                self.gql.endpoint_cursor = crate::app::text_utils::next_char_boundary(&self.gql.endpoint, self.gql.endpoint_cursor);
+                self.gql.endpoint_cursor = crate::app::text_utils::next_char_boundary(
+                    &self.gql.endpoint,
+                    self.gql.endpoint_cursor,
+                );
             }
             GqlField::Query => {
-                self.gql.query_cursor = crate::app::text_utils::next_char_boundary(&self.gql.query, self.gql.query_cursor);
+                self.gql.query_cursor = crate::app::text_utils::next_char_boundary(
+                    &self.gql.query,
+                    self.gql.query_cursor,
+                );
             }
             GqlField::Variables => {
-                self.gql.variables_cursor = crate::app::text_utils::next_char_boundary(&self.gql.variables, self.gql.variables_cursor);
+                self.gql.variables_cursor = crate::app::text_utils::next_char_boundary(
+                    &self.gql.variables,
+                    self.gql.variables_cursor,
+                );
             }
         }
     }

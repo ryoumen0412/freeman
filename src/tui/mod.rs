@@ -8,6 +8,6 @@ pub mod draw;
 pub mod gql_tab;
 pub mod http_tab;
 pub mod popups;
+pub mod theme;
 pub mod widgets;
 pub mod ws_tab;
-pub mod theme;

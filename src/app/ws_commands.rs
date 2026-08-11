@@ -73,33 +73,40 @@ impl AppState {
             self.ws.url_cursor = crate::app::text_utils::insert_char(&mut self.ws.url, cursor, c);
         } else {
             let cursor = self.ws.cursor_position;
-            self.ws.cursor_position = crate::app::text_utils::insert_char(&mut self.ws.input, cursor, c);
+            self.ws.cursor_position =
+                crate::app::text_utils::insert_char(&mut self.ws.input, cursor, c);
         }
     }
 
     pub fn ws_backspace(&mut self) {
         if self.ws.editing_url {
             let cursor = self.ws.url_cursor;
-            self.ws.url_cursor = crate::app::text_utils::delete_char_before(&mut self.ws.url, cursor);
+            self.ws.url_cursor =
+                crate::app::text_utils::delete_char_before(&mut self.ws.url, cursor);
         } else {
             let cursor = self.ws.cursor_position;
-            self.ws.cursor_position = crate::app::text_utils::delete_char_before(&mut self.ws.input, cursor);
+            self.ws.cursor_position =
+                crate::app::text_utils::delete_char_before(&mut self.ws.input, cursor);
         }
     }
 
     pub fn ws_cursor_left(&mut self) {
         if self.ws.editing_url {
-            self.ws.url_cursor = crate::app::text_utils::prev_char_boundary(&self.ws.url, self.ws.url_cursor);
+            self.ws.url_cursor =
+                crate::app::text_utils::prev_char_boundary(&self.ws.url, self.ws.url_cursor);
         } else {
-            self.ws.cursor_position = crate::app::text_utils::prev_char_boundary(&self.ws.input, self.ws.cursor_position);
+            self.ws.cursor_position =
+                crate::app::text_utils::prev_char_boundary(&self.ws.input, self.ws.cursor_position);
         }
     }
 
     pub fn ws_cursor_right(&mut self) {
         if self.ws.editing_url {
-            self.ws.url_cursor = crate::app::text_utils::next_char_boundary(&self.ws.url, self.ws.url_cursor);
+            self.ws.url_cursor =
+                crate::app::text_utils::next_char_boundary(&self.ws.url, self.ws.url_cursor);
         } else {
-            self.ws.cursor_position = crate::app::text_utils::next_char_boundary(&self.ws.input, self.ws.cursor_position);
+            self.ws.cursor_position =
+                crate::app::text_utils::next_char_boundary(&self.ws.input, self.ws.cursor_position);
         }
     }
 

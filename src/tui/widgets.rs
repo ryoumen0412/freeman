@@ -3,9 +3,9 @@
 //! Contains shared rendering primitives used across all tabs:
 //! text inputs, header lists, tab bars, JSON highlighting, and color helpers.
 
-use ratatui::{prelude::*, widgets::*};
 use crate::models::Header;
 use crate::tui::theme::Theme;
+use ratatui::{prelude::*, widgets::*};
 
 // ============================================================================
 // Input Widget
@@ -107,7 +107,11 @@ pub fn render_tabs<'a>(titles: &[&'a str], selected: usize) -> Tabs<'a> {
     Tabs::new(titles)
         .select(selected)
         .style(Style::default().fg(theme.text_muted))
-        .highlight_style(Style::default().fg(theme.text_normal).bg(theme.border_normal))
+        .highlight_style(
+            Style::default()
+                .fg(theme.text_normal)
+                .bg(theme.border_normal),
+        )
         .divider(" | ")
 }
 
@@ -151,7 +155,7 @@ pub fn highlight_json(text: &str) -> Vec<Line<'static>> {
                     if in_string {
                         // End of string
                         current.push(c);
-                        
+
                         // Look ahead to see if the next non-whitespace char is ':'
                         let mut lookahead = chars.clone();
                         let next_char = lookahead.find(|&ch| !ch.is_whitespace());

@@ -54,7 +54,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czvf ../../../freeman-tui-${{ github.ref_name }}-${{ matrix.target }}.tar.gz freeman-tui
+          tar czvf ../../../freeman-${{ github.ref_name }}-${{ matrix.target }}.tar.gz freeman
           cd ../../..
 
       - name: Package (Windows)
@@ -62,14 +62,14 @@ jobs:
         shell: pwsh
         run: |
           cd target/${{ matrix.target }}/release
-          Compress-Archive -Path freeman-tui.exe -DestinationPath ../../../freeman-tui-${{ github.ref_name }}-${{ matrix.target }}.zip
+          Compress-Archive -Path freeman.exe -DestinationPath ../../../freeman-${{ github.ref_name }}-${{ matrix.target }}.zip
           cd ../../..
 
       - name: Upload artifact
         uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
         with:
-          name: freeman-tui-${{ matrix.target }}
-          path: freeman-tui-${{ github.ref_name }}-${{ matrix.target }}.*
+          name: freeman-${{ matrix.target }}
+          path: freeman-${{ github.ref_name }}-${{ matrix.target }}.*
 
   create-release:
     name: Create Release

@@ -17,7 +17,7 @@ It provides a seamless, keyboard-driven interface to explore, test, and manage R
   - **WebSockets:** Real-time bi-directional messaging with live connection logs.
   - **GraphQL:** Native support for executing queries and managing variables.
 - **Auto-Discovery (Workspaces):** Automatically detects and parses API endpoints directly from your source code or OpenAPI specs.
-  - *Supported: OpenAPI, FastAPI, Flask, Django, Express.js, NestJS, Spring Boot, Laravel.*
+  - *Supported: OpenAPI, FastAPI, Flask, Django, Express.js, NestJS, Spring Boot, Laravel, Actix Web, Axum, Gin.*
 - **cURL Integration:** Seamlessly import cURL commands to instantly populate requests, or export your current request to a cURL string.
 - **Request History:** Never lose an endpoint. Navigate through your previously executed requests.
 
@@ -39,7 +39,7 @@ cargo install freeman
 git clone https://github.com/ryoumen0412/freeman.git
 cd freeman
 cargo build --release
-# The binary will be available at target/release/freeman-tui
+# The binary will be available at target/release/freeman
 ```
 
 ---

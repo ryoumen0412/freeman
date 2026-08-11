@@ -219,13 +219,11 @@ impl AppState {
             Panel::Body => &mut self.request.body,
             Panel::Auth => match &mut self.request.auth {
                 AuthType::Bearer(token) => token,
-                AuthType::Basic { username, password } => {
-                    match self.auth_field {
-                        AuthField::Token => &mut self.dummy_input,
-                        AuthField::Username => username,
-                        AuthField::Password => password,
-                    }
-                }
+                AuthType::Basic { username, password } => match self.auth_field {
+                    AuthField::Token => &mut self.dummy_input,
+                    AuthField::Username => username,
+                    AuthField::Password => password,
+                },
                 AuthType::None => &mut self.dummy_input,
             },
             _ => &mut self.dummy_input,

@@ -48,12 +48,14 @@ impl AppState {
 
     pub fn move_cursor_left(&mut self) {
         let input = self.current_input();
-        self.cursor_position = crate::app::text_utils::prev_char_boundary(input, self.cursor_position);
+        self.cursor_position =
+            crate::app::text_utils::prev_char_boundary(input, self.cursor_position);
     }
 
     pub fn move_cursor_right(&mut self) {
         let input = self.current_input();
-        self.cursor_position = crate::app::text_utils::next_char_boundary(input, self.cursor_position);
+        self.cursor_position =
+            crate::app::text_utils::next_char_boundary(input, self.cursor_position);
     }
 
     pub fn enter_char(&mut self, c: char) {

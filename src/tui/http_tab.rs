@@ -3,7 +3,7 @@
 use ratatui::{prelude::*, widgets::*};
 
 use crate::discovery::AuthRequirement;
-use crate::messages::ui_events::{InputMode, Panel, AuthField};
+use crate::messages::ui_events::{AuthField, InputMode, Panel};
 use crate::messages::RenderState;
 use crate::models::AuthType;
 use crate::tui::theme::Theme;
@@ -157,7 +157,7 @@ fn draw_body_panel(f: &mut Frame, state: &RenderState, area: Rect) {
     if is_editing && http.method.has_body() {
         let text_before_cursor = &content[..http.cursor_position.min(content.len())];
         cursor_line_idx = text_before_cursor.chars().filter(|&c| c == '\n').count() as u16;
-        let last_line = text_before_cursor.split('\n').last().unwrap_or("");
+        let last_line = text_before_cursor.split('\n').next_back().unwrap_or("");
         cursor_col_idx = last_line.chars().count() as u16;
 
         scroll_y = if cursor_line_idx >= max_visible_lines {
@@ -174,8 +174,15 @@ fn draw_body_panel(f: &mut Frame, state: &RenderState, area: Rect) {
     }
 
     let theme = Theme::default();
-    let widget = render_input(content, title, is_editing, is_focused, theme.border_focus, !is_editing)
-        .scroll((scroll_y, scroll_x));
+    let widget = render_input(
+        content,
+        title,
+        is_editing,
+        is_focused,
+        theme.border_focus,
+        !is_editing,
+    )
+    .scroll((scroll_y, scroll_x));
     f.render_widget(widget, area);
 
     if is_editing && http.method.has_body() {
@@ -256,34 +263,34 @@ fn draw_auth_panel(f: &mut Frame, state: &RenderState, area: Rect) {
     let (input_content, scroll_x) = if is_focused && state.input_mode == InputMode::Editing {
         let current_input = match &http.auth {
             AuthType::Bearer(token) => token,
-            AuthType::Basic { username, password } => {
-                match http.auth_field {
-                    AuthField::Username => username,
-                    AuthField::Password => password,
-                    _ => "",
-                }
-            }
+            AuthType::Basic { username, password } => match http.auth_field {
+                AuthField::Username => username,
+                AuthField::Password => password,
+                _ => "",
+            },
             _ => "",
         };
         let text_before_cursor = &current_input[..http.cursor_position.min(current_input.len())];
         let cursor_col = text_before_cursor.chars().count() as u16;
         let max_cols = area.width.saturating_sub(2);
-        let sx = if cursor_col >= max_cols { cursor_col - max_cols + 1 } else { 0 };
+        let sx = if cursor_col >= max_cols {
+            cursor_col - max_cols + 1
+        } else {
+            0
+        };
         (current_input, sx)
     } else {
         ("", 0)
     };
 
-    let auth = Paragraph::new(content)
-        .block(block)
-        .scroll((0, scroll_x));
+    let auth = Paragraph::new(content).block(block).scroll((0, scroll_x));
     f.render_widget(auth, area);
 
     if is_focused && state.input_mode == InputMode::Editing {
         let text_before_cursor = &input_content[..http.cursor_position.min(input_content.len())];
         let cursor_col = text_before_cursor.chars().count() as u16;
         let cursor_x = area.x + 1 + cursor_col - scroll_x;
-        // Basic auth has two fields, but we only draw one cursor. 
+        // Basic auth has two fields, but we only draw one cursor.
         // We assume it's roughly on the first line for now as auth forms aren't multi-line.
         f.set_cursor_position(Position::new(cursor_x, area.y + 1));
     }
