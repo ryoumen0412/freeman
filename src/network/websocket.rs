@@ -44,7 +44,7 @@ pub async fn connect_websocket(
 
             // Handle outgoing messages
             Some(msg) = message_rx.recv() => {
-                if let Err(e) = write.send(Message::Text(msg)).await {
+                if let Err(e) = write.send(Message::Text(msg.into())).await {
                     let _ = response_tx.send(NetworkResponse::WebSocketError {
                         id,
                         error: format!("Send failed: {}", e),
@@ -59,7 +59,7 @@ pub async fn connect_websocket(
                     Some(Ok(Message::Text(text))) => {
                         let _ = response_tx.send(NetworkResponse::WebSocketMessage {
                             id,
-                            message: text,
+                            message: text.to_string(),
                         });
                     }
                     Some(Ok(Message::Binary(data))) => {

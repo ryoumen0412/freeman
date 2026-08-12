@@ -1,0 +1,6 @@
+# cargo-audit configuration file
+
+[advisories]
+ignore = [
+    "RUSTSEC-2024-0320", # serde_yaml is unmaintained (tracked for future migration)
+]
