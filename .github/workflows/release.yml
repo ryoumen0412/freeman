@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -56,7 +57,11 @@ jobs:
           cd target/${{ matrix.target }}/release
           tar czvf ../../../freeman-${{ github.ref_name }}-${{ matrix.target }}.tar.gz freeman
           cd ../../..
-          shasum -a 256 freeman-${{ github.ref_name }}-${{ matrix.target }}.tar.gz > freeman-${{ github.ref_name }}-${{ matrix.target }}.tar.gz.sha256
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum freeman-${{ github.ref_name }}-${{ matrix.target }}.tar.gz > freeman-${{ github.ref_name }}-${{ matrix.target }}.tar.gz.sha256
+          else
+            shasum -a 256 freeman-${{ github.ref_name }}-${{ matrix.target }}.tar.gz > freeman-${{ github.ref_name }}-${{ matrix.target }}.tar.gz.sha256
+          fi
 
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
@@ -106,11 +111,11 @@ jobs:
     name: Publish to Crates.io
     needs: create-release
     runs-on: ubuntu-latest
+    if: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - uses: dtolnay/rust-toolchain@stable
       - name: Publish to Crates.io
-        if: env.CARGO_REGISTRY_TOKEN != ''
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --no-verify
