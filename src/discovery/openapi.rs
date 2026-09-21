@@ -296,6 +296,15 @@ fn parse_request_body(body: &Value) -> Option<BodySchema> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::discovery::models::{AuthRequirement, ParameterLocation};
+
+    fn write_spec(dir: &std::path::Path, filename: &str, content: &str) -> std::path::PathBuf {
+        let path = dir.join(filename);
+        std::fs::write(&path, content).unwrap();
+        path
+    }
+
+    // ── Basic parsing ─────────────────────────────────────────────────────────
 
     #[test]
     fn test_parse_simple_openapi() {
@@ -319,11 +328,359 @@ paths:
 "#;
 
         let temp_dir = tempfile::tempdir().unwrap();
-        let spec_path = temp_dir.path().join("openapi.yaml");
-        std::fs::write(&spec_path, yaml).unwrap();
+        let spec_path = write_spec(temp_dir.path(), "openapi.yaml", yaml);
 
         let project = parse_openapi(&spec_path).unwrap();
         assert_eq!(project.title, Some("Test API".to_string()));
         assert_eq!(project.endpoints.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_version_extracted() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: My API
+  version: 2.3.1
+paths: {}
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+        assert_eq!(project.version, Some("2.3.1".to_string()));
+    }
+
+    // ── Servers → base_url ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_servers_sets_base_url() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+servers:
+  - url: https://api.production.com/v1
+  - url: https://api.staging.com/v1
+paths: {}
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+        // First server wins
+        assert_eq!(
+            project.base_url,
+            Some("https://api.production.com/v1".to_string())
+        );
+    }
+
+    // ── Parameters ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_path_and_query_parameters() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+paths:
+  /users/{id}:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: include_deleted
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        200:
+          description: OK
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+
+        let endpoint = &project.endpoints[0];
+        assert_eq!(endpoint.parameters.len(), 2);
+
+        let path_param = endpoint
+            .parameters
+            .iter()
+            .find(|p| p.name == "id")
+            .unwrap();
+        assert_eq!(path_param.location, ParameterLocation::Path);
+        assert!(path_param.required);
+        assert_eq!(path_param.param_type, "integer");
+
+        let query_param = endpoint
+            .parameters
+            .iter()
+            .find(|p| p.name == "include_deleted")
+            .unwrap();
+        assert_eq!(query_param.location, ParameterLocation::Query);
+        assert!(!query_param.required);
+    }
+
+    // ── Request body ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_request_body_with_ref() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+paths:
+  /users:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        201:
+          description: Created
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+
+        let body = project.endpoints[0].body.as_ref().unwrap();
+        assert_eq!(body.content_type, "application/json");
+        assert_eq!(body.schema_name, Some("CreateUserRequest".to_string()));
+        assert!(body.required);
+    }
+
+    // ── Security schemes ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_bearer_security_scheme() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+security:
+  - BearerAuth: []
+paths:
+  /secure:
+    get:
+      responses:
+        200:
+          description: OK
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+
+        assert_eq!(project.endpoints[0].auth, AuthRequirement::Bearer);
+    }
+
+    #[test]
+    fn test_parse_apikey_security_scheme() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+security:
+  - ApiKeyAuth: []
+paths:
+  /items:
+    get:
+      responses:
+        200:
+          description: OK
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+
+        assert!(matches!(
+            project.endpoints[0].auth,
+            AuthRequirement::ApiKey { .. }
+        ));
+    }
+
+    #[test]
+    fn test_global_security_propagates_to_all_endpoints() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+security:
+  - BearerAuth: []
+paths:
+  /a:
+    get:
+      responses:
+        200:
+          description: OK
+  /b:
+    post:
+      responses:
+        200:
+          description: OK
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+
+        for endpoint in &project.endpoints {
+            assert_eq!(
+                endpoint.auth,
+                AuthRequirement::Bearer,
+                "endpoint {} should inherit global Bearer auth",
+                endpoint.path
+            );
+        }
+    }
+
+    // ── Deprecated ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_deprecated_endpoint() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+paths:
+  /old-endpoint:
+    get:
+      deprecated: true
+      summary: Old way to get data
+      responses:
+        200:
+          description: OK
+  /new-endpoint:
+    get:
+      summary: New way to get data
+      responses:
+        200:
+          description: OK
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+
+        let deprecated = project
+            .endpoints
+            .iter()
+            .find(|e| e.path == "/old-endpoint")
+            .unwrap();
+        let active = project
+            .endpoints
+            .iter()
+            .find(|e| e.path == "/new-endpoint")
+            .unwrap();
+
+        assert!(deprecated.deprecated);
+        assert!(!active.deprecated);
+    }
+
+    // ── JSON format ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_json_format_spec() {
+        let json = r#"{
+  "openapi": "3.0.0",
+  "info": { "title": "JSON API", "version": "1.0.0" },
+  "paths": {
+    "/items": {
+      "get": {
+        "summary": "List items",
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  }
+}"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.json", json);
+        let project = parse_openapi(&path).unwrap();
+
+        assert_eq!(project.title, Some("JSON API".to_string()));
+        assert_eq!(project.endpoints.len(), 1);
+        assert_eq!(project.endpoints[0].path, "/items");
+    }
+
+    // ── Tags ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_endpoint_tags() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+paths:
+  /users:
+    get:
+      tags:
+        - users
+        - public
+      responses:
+        200:
+          description: OK
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+
+        assert_eq!(project.endpoints[0].tags, vec!["users", "public"]);
+    }
+
+    // ── non-HTTP keys skipped ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_path_level_parameters_key_not_counted_as_endpoint() {
+        let yaml = r#"
+openapi: 3.0.0
+info:
+  title: API
+  version: 1.0.0
+paths:
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      responses:
+        200:
+          description: OK
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_spec(dir.path(), "openapi.yaml", yaml);
+        let project = parse_openapi(&path).unwrap();
+        // Only GET should be an endpoint — "parameters" key must be skipped
+        assert_eq!(project.endpoints.len(), 1);
+        assert_eq!(project.endpoints[0].method, "GET");
     }
 }

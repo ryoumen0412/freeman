@@ -204,6 +204,9 @@ pub fn to_curl(request: &Request) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::HttpMethod;
+
+    // ── parse_curl ───────────────────────────────────────────────────────────
 
     #[test]
     fn test_parse_simple_get() {
@@ -220,4 +223,210 @@ mod tests {
         assert_eq!(req.method, HttpMethod::POST);
         assert_eq!(req.body, r#"{"name":"test"}"#);
     }
+
+    #[test]
+    fn test_parse_put_method() {
+        let curl = "curl -X PUT https://api.example.com/users/1";
+        let req = parse_curl(curl).unwrap();
+        assert_eq!(req.method, HttpMethod::PUT);
+    }
+
+    #[test]
+    fn test_parse_delete_method() {
+        let curl = "curl -X DELETE https://api.example.com/users/1";
+        let req = parse_curl(curl).unwrap();
+        assert_eq!(req.method, HttpMethod::DELETE);
+    }
+
+    #[test]
+    fn test_parse_patch_method() {
+        let curl = "curl -X PATCH https://api.example.com/users/1";
+        let req = parse_curl(curl).unwrap();
+        assert_eq!(req.method, HttpMethod::PATCH);
+    }
+
+    #[test]
+    fn test_parse_data_infers_post_when_no_method() {
+        let curl = r#"curl -d '{"x":1}' https://api.example.com/items"#;
+        let req = parse_curl(curl).unwrap();
+        // No -X flag → should infer POST when body is present
+        assert_eq!(req.method, HttpMethod::POST);
+        assert_eq!(req.body, r#"{"x":1}"#);
+    }
+
+    #[test]
+    fn test_parse_bearer_auth_via_header_flag() {
+        // When Bearer is passed via -H, the parser stores it as a regular header
+        // (not as AuthType::Bearer). This is the documented behavior of parse_curl.
+        let curl = r#"curl -H "Authorization: Bearer my-secret-token" https://api.example.com"#;
+        let req = parse_curl(curl).unwrap();
+        // Auth type remains None when using -H for Authorization
+        assert_eq!(req.auth, AuthType::None);
+        // The Authorization header IS stored in headers
+        let auth_header = req
+            .headers
+            .iter()
+            .find(|h| h.key.to_lowercase() == "authorization");
+        assert!(auth_header.is_some(), "Authorization header should be in headers");
+        assert!(auth_header.unwrap().value.contains("Bearer"));
+    }
+
+    #[test]
+    fn test_parse_basic_auth() {
+        let curl = "curl -u user:password https://api.example.com";
+        let req = parse_curl(curl).unwrap();
+        assert_eq!(
+            req.auth,
+            AuthType::Basic {
+                username: "user".to_string(),
+                password: "password".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_basic_auth_no_password() {
+        let curl = "curl -u useronly https://api.example.com";
+        let req = parse_curl(curl).unwrap();
+        assert_eq!(
+            req.auth,
+            AuthType::Basic {
+                username: "useronly".to_string(),
+                password: String::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_multiline_backslash_continuation() {
+        let curl = "curl \\\n  -X POST \\\n  https://api.example.com/items";
+        let req = parse_curl(curl).unwrap();
+        assert_eq!(req.method, HttpMethod::POST);
+        assert_eq!(req.url, "https://api.example.com/items");
+    }
+
+    #[test]
+    fn test_parse_ignored_flags_do_not_error() {
+        let curl = "curl --compressed -k --insecure -L --location -s --silent -v --verbose https://api.example.com";
+        let req = parse_curl(curl).unwrap();
+        assert_eq!(req.url, "https://api.example.com");
+    }
+
+    #[test]
+    fn test_parse_duplicate_headers_deduped() {
+        let curl = r#"curl -H "Accept: application/json" -H "Accept: text/html" https://api.example.com"#;
+        let req = parse_curl(curl).unwrap();
+        // Second Accept header should be ignored (duplicate key)
+        let accept_headers: Vec<_> = req
+            .headers
+            .iter()
+            .filter(|h| h.key.to_lowercase() == "accept")
+            .collect();
+        assert_eq!(accept_headers.len(), 1);
+        assert_eq!(accept_headers[0].value, "application/json");
+    }
+
+    // ── to_curl ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_to_curl_simple_get() {
+        use crate::models::Request;
+        let mut req = Request::default();
+        req.url = "https://api.example.com/users".to_string();
+        req.headers.clear();
+
+        let curl = to_curl(&req);
+        // GET should NOT include -X GET
+        assert!(!curl.contains("-X GET"));
+        assert!(curl.contains("https://api.example.com/users"));
+    }
+
+    #[test]
+    fn test_to_curl_post_includes_method_and_body() {
+        use crate::models::{HttpMethod, Request};
+        let mut req = Request::default();
+        req.method = HttpMethod::POST;
+        req.url = "https://api.example.com/items".to_string();
+        req.body = r#"{"name":"widget"}"#.to_string();
+        req.headers.clear();
+
+        let curl = to_curl(&req);
+        assert!(curl.contains("-X POST"));
+        assert!(curl.contains(r#"{"name":"widget"}"#));
+    }
+
+    #[test]
+    fn test_to_curl_bearer_auth() {
+        use crate::models::{AuthType, Request};
+        let mut req = Request::default();
+        req.url = "https://api.example.com".to_string();
+        req.auth = AuthType::Bearer("tok123".to_string());
+        req.headers.clear();
+
+        let curl = to_curl(&req);
+        assert!(curl.contains("Authorization: Bearer tok123"));
+    }
+
+    #[test]
+    fn test_to_curl_basic_auth() {
+        use crate::models::{AuthType, Request};
+        let mut req = Request::default();
+        req.url = "https://api.example.com".to_string();
+        req.auth = AuthType::Basic {
+            username: "alice".to_string(),
+            password: "s3cr3t".to_string(),
+        };
+        req.headers.clear();
+
+        let curl = to_curl(&req);
+        assert!(curl.contains("-u 'alice:s3cr3t'"));
+    }
+
+    #[test]
+    fn test_to_curl_disabled_headers_excluded() {
+        use crate::models::{Header, HttpMethod, Request};
+        let mut req = Request::default();
+        req.method = HttpMethod::GET;
+        req.url = "https://api.example.com".to_string();
+        req.headers.clear();
+
+        let mut disabled = Header::new("X-Debug", "true");
+        disabled.enabled = false;
+        req.headers.push(disabled);
+        req.headers.push(Header::new("X-Active", "yes"));
+
+        let curl = to_curl(&req);
+        assert!(!curl.contains("X-Debug"), "disabled header should not appear");
+        assert!(curl.contains("X-Active"), "enabled header should appear");
+    }
+
+    #[test]
+    fn test_roundtrip_post_with_basic_auth() {
+        // Roundtrip with Basic auth: to_curl uses -u flag, parse_curl reads -u flag
+        use crate::models::{AuthType, Header, HttpMethod, Request};
+        let mut req = Request::default();
+        req.method = HttpMethod::POST;
+        req.url = "https://api.example.com/data".to_string();
+        req.auth = AuthType::Basic {
+            username: "alice".to_string(),
+            password: "s3cr3t".to_string(),
+        };
+        req.body = r#"{"key":"value"}"#.to_string();
+        req.headers = vec![Header::new("Content-Type", "application/json")];
+
+        let curl_str = to_curl(&req);
+        let parsed = parse_curl(&curl_str).unwrap();
+
+        assert_eq!(parsed.method, HttpMethod::POST);
+        assert_eq!(parsed.url, req.url);
+        assert_eq!(
+            parsed.auth,
+            AuthType::Basic {
+                username: "alice".to_string(),
+                password: "s3cr3t".to_string(),
+            }
+        );
+        assert_eq!(parsed.body, req.body);
+    }
 }
+

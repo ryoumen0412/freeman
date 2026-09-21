@@ -80,7 +80,7 @@ impl AppActor {
             UiEvent::ToggleSslErrors => self.state.toggle_ssl_errors(),
             UiEvent::SendRequest => {
                 // Stop editing first if in URL panel
-                if self.state.input_mode == crate::messages::ui_events::InputMode::Editing {
+                if self.state.ui.input_mode == crate::messages::ui_events::InputMode::Editing {
                     self.state.stop_editing();
                 }
                 if let Some(cmd) = self.state.prepare_streaming_request() {
@@ -152,7 +152,7 @@ impl AppActor {
 
             // GraphQL
             UiEvent::GqlExecuteQuery => {
-                if self.state.input_mode == crate::messages::ui_events::InputMode::Editing {
+                if self.state.ui.input_mode == crate::messages::ui_events::InputMode::Editing {
                     self.state.stop_editing();
                 }
                 if let Some(cmd) = self.state.gql_execute_query() {

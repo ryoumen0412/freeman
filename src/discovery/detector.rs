@@ -228,13 +228,204 @@ fn detect_go_framework(root: &Path) -> Option<Framework> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
+    use std::fs::{self, File};
     use tempfile::tempdir;
 
+    // ── OpenAPI (highest priority) ────────────────────────────────────────────
+
     #[test]
-    fn test_detect_openapi() {
+    fn test_detect_openapi_yaml() {
         let dir = tempdir().unwrap();
         File::create(dir.path().join("openapi.yaml")).unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::OpenAPI);
+    }
+
+    #[test]
+    fn test_detect_openapi_swagger_yml() {
+        let dir = tempdir().unwrap();
+        File::create(dir.path().join("swagger.yml")).unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::OpenAPI);
+    }
+
+    #[test]
+    fn test_detect_openapi_json() {
+        let dir = tempdir().unwrap();
+        File::create(dir.path().join("openapi.json")).unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::OpenAPI);
+    }
+
+    #[test]
+    fn test_find_openapi_spec_in_api_subdir() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join("api")).unwrap();
+        File::create(dir.path().join("api/openapi.yaml")).unwrap();
+        assert!(find_openapi_spec(dir.path()).is_some());
+    }
+
+    #[test]
+    fn test_find_openapi_spec_none_when_absent() {
+        let dir = tempdir().unwrap();
+        assert!(find_openapi_spec(dir.path()).is_none());
+    }
+
+    // ── Python frameworks ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_detect_fastapi_from_requirements() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("requirements.txt"), "fastapi==0.100.0\nuvicorn").unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::FastAPI);
+    }
+
+    #[test]
+    fn test_detect_flask_from_requirements() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("requirements.txt"), "flask==3.0.0\ngunicorn").unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Flask);
+    }
+
+    #[test]
+    fn test_detect_django_from_manage_py() {
+        let dir = tempdir().unwrap();
+        File::create(dir.path().join("manage.py")).unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Django);
+    }
+
+    #[test]
+    fn test_detect_django_from_requirements() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("requirements.txt"), "django==4.2\npsycopg2").unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Django);
+    }
+
+    #[test]
+    fn test_detect_fastapi_from_pyproject_toml() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("pyproject.toml"),
+            "[tool.poetry.dependencies]\nfastapi = \"^0.100\"",
+        )
+        .unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::FastAPI);
+    }
+
+    // ── Node.js frameworks ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_detect_nestjs_from_package_json() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("package.json"),
+            r#"{"dependencies": {"@nestjs/core": "^10.0.0"}}"#,
+        )
+        .unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::NestJS);
+    }
+
+    #[test]
+    fn test_detect_express_from_package_json() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("package.json"),
+            r#"{"dependencies": {"express": "^4.18"}}"#,
+        )
+        .unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Express);
+    }
+
+    // ── Java (Spring Boot) ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_detect_spring_from_pom_xml() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("pom.xml"),
+            "<dependency><artifactId>spring-boot-starter-web</artifactId></dependency>",
+        )
+        .unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::SpringBoot);
+    }
+
+    #[test]
+    fn test_detect_spring_from_build_gradle() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("build.gradle"),
+            "plugins { id 'org.springframework.boot' version '3.2.0' }",
+        )
+        .unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::SpringBoot);
+    }
+
+    // ── PHP (Laravel) ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_detect_laravel_from_composer_json() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("composer.json"),
+            r#"{"require": {"laravel/framework": "^10.0"}}"#,
+        )
+        .unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Laravel);
+    }
+
+    #[test]
+    fn test_detect_laravel_from_artisan_file() {
+        let dir = tempdir().unwrap();
+        File::create(dir.path().join("artisan")).unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Laravel);
+    }
+
+    // ── Rust frameworks ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_detect_actix_from_cargo_toml() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[dependencies]\nactix-web = \"4\"",
+        )
+        .unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Actix);
+    }
+
+    #[test]
+    fn test_detect_axum_from_cargo_toml() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("Cargo.toml"), "[dependencies]\naxum = \"0.7\"").unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Axum);
+    }
+
+    // ── Go (Gin) ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_detect_gin_from_go_mod() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("go.mod"),
+            "module myapp\n\nrequire github.com/gin-gonic/gin v1.9.1",
+        )
+        .unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Gin);
+    }
+
+    // ── Unknown ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_detect_unknown_empty_directory() {
+        let dir = tempdir().unwrap();
+        assert_eq!(detect_framework(dir.path()), Framework::Unknown);
+    }
+
+    // ── Priority: OpenAPI beats source files ──────────────────────────────────
+
+    #[test]
+    fn test_openapi_takes_priority_over_python() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("requirements.txt"), "fastapi").unwrap();
+        File::create(dir.path().join("openapi.yaml")).unwrap();
+        // OpenAPI spec should win
         assert_eq!(detect_framework(dir.path()), Framework::OpenAPI);
     }
 }

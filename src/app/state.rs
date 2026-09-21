@@ -1,4 +1,13 @@
 //! App state - pure data structure with no I/O logic
+//!
+//! AppState is composed of specialized sub-states, each with a clear responsibility:
+//! - `UiState` — interaction mode, cursor, popups
+//! - `NavigationState` — where the user is (tab, panel)
+//! - `HttpState` — request, response, loading, streaming, headers/auth UI
+//! - `WebSocketState` — WS connection, messages, input
+//! - `GraphQLState` — GQL endpoint, query, variables, response
+//! - `WorkspaceState` — project discovery, endpoint selection
+//! - `HistoryState` — history navigation index
 
 use crate::discovery::WorkspaceProject;
 use crate::messages::ui_events::{AppTab, AuthField, GqlField, InputMode, Panel};
@@ -6,6 +15,10 @@ use crate::messages::RenderState;
 use crate::models::{AuthType, Request, Response};
 use crate::storage::Storage;
 use ratatui::text::Line;
+
+// ============================================================================
+// WebSocket types (unchanged)
+// ============================================================================
 
 /// Direction of WebSocket message
 #[derive(Clone, Debug)]
@@ -55,6 +68,10 @@ impl Default for WebSocketState {
     }
 }
 
+// ============================================================================
+// GraphQL state (unchanged)
+// ============================================================================
+
 /// GraphQL state
 #[derive(Clone, Debug)]
 pub struct GraphQLState {
@@ -91,28 +108,46 @@ impl Default for GraphQLState {
     }
 }
 
-/// Main application state - pure data, no I/O
-pub struct AppState {
-    // Tab navigation
-    pub active_tab: AppTab,
+// ============================================================================
+// New specialized sub-states
+// ============================================================================
 
-    // HTTP Request data
-    pub request: Request,
+/// UI interaction state — how the interface is presented/interacted
+pub struct UiState {
+    /// Current input mode (Normal / Editing)
+    pub input_mode: InputMode,
+    /// Cursor position in the currently active text field
     pub cursor_position: usize,
 
-    // UI state
-    pub active_panel: Panel,
-    pub input_mode: InputMode,
-    pub response_scroll: u16,
+    // Popups
+    pub show_help: bool,
+    pub show_curl_import: bool,
+    pub curl_import_buffer: String,
+    pub show_workspace_input: bool,
 
-    // HTTP Response
+    /// Dummy input fallback to avoid mutating URL accidentally
+    pub dummy_input: String,
+}
+
+/// Navigation state — where the user is in the application
+pub struct NavigationState {
+    pub active_tab: AppTab,
+    pub active_panel: Panel,
+}
+
+/// HTTP domain state — everything about the current request/response cycle
+pub struct HttpState {
+    // Request
+    pub request: Request,
+
+    // Response
     pub response: Response,
     pub highlighted_response: Vec<Line<'static>>,
-    pub is_loading: bool,
-    pub next_request_id: u64,
-    pub pending_request_id: Option<u64>,
+    pub response_scroll: u16,
 
-    // Streaming state
+    // Loading / streaming
+    pub is_loading: bool,
+    pub pending_request_id: Option<u64>,
     pub streaming_body: String,
     pub bytes_received: usize,
 
@@ -121,31 +156,48 @@ pub struct AppState {
 
     // Auth panel
     pub auth_field: AuthField,
+}
 
-    // History
-    pub history_index: Option<usize>,
+/// Workspace domain state — project discovery and endpoint management
+pub struct WorkspaceState {
+    pub project: Option<WorkspaceProject>,
+    pub path_input: String,
+    pub selected_endpoint: usize,
+}
 
-    // Storage (persisted data)
+/// History navigation state
+pub struct HistoryState {
+    pub index: Option<usize>,
+}
+
+// ============================================================================
+// AppState — the aggregator
+// ============================================================================
+
+/// Main application state - pure data, no I/O
+///
+/// Composed of specialized sub-states. Each sub-state owns a coherent
+/// slice of the application domain. AppState is the aggregator, not
+/// the place where all knowledge lives.
+pub struct AppState {
+    // UI / navigation
+    pub ui: UiState,
+    pub navigation: NavigationState,
+
+    // Protocol states
+    pub http: HttpState,
+    pub ws: WebSocketState,
+    pub gql: GraphQLState,
+
+    // Domain states
+    pub workspace: WorkspaceState,
+    pub history: HistoryState,
+
+    // Storage (persisted data — repository, not domain state)
     pub storage: Storage,
 
-    // Workspace discovery
-    pub workspace: Option<WorkspaceProject>,
-    pub workspace_path_input: String,
-    pub selected_endpoint: usize,
-
-    // Popups
-    pub show_help: bool,
-    pub show_curl_import: bool,
-    pub curl_import_buffer: String,
-    pub show_workspace_input: bool,
-
-    // WebSocket state (persists across tab switches)
-    pub ws: WebSocketState,
-
-    // GraphQL state
-    pub gql: GraphQLState,
-    // Dummy input fallback to avoid mutating URL accidentally
-    pub dummy_input: String,
+    // Shared ID generator
+    pub next_request_id: u64,
 }
 
 impl Default for AppState {
@@ -157,33 +209,43 @@ impl Default for AppState {
 impl AppState {
     pub fn new() -> Self {
         AppState {
-            active_tab: AppTab::Http,
-            request: Request::default(),
-            cursor_position: 24, // Length of default URL
-            active_panel: Panel::Url,
-            input_mode: InputMode::Normal,
-            response_scroll: 0,
-            response: Response::default(),
-            highlighted_response: crate::tui::widgets::highlight_json(&Response::default().body),
-            is_loading: false,
-            next_request_id: 1,
-            pending_request_id: None,
-            streaming_body: String::new(),
-            bytes_received: 0,
-            selected_header: 0,
-            auth_field: AuthField::Token,
-            history_index: None,
-            storage: Storage::new(),
-            workspace: None,
-            workspace_path_input: String::new(),
-            selected_endpoint: 0,
-            show_help: false,
-            show_curl_import: false,
-            curl_import_buffer: String::new(),
-            show_workspace_input: false,
+            ui: UiState {
+                input_mode: InputMode::Normal,
+                cursor_position: 24, // Length of default URL
+                show_help: false,
+                show_curl_import: false,
+                curl_import_buffer: String::new(),
+                show_workspace_input: false,
+                dummy_input: String::new(),
+            },
+            navigation: NavigationState {
+                active_tab: AppTab::Http,
+                active_panel: Panel::Url,
+            },
+            http: HttpState {
+                request: Request::default(),
+                response: Response::default(),
+                highlighted_response: crate::tui::widgets::highlight_json(
+                    &Response::default().body,
+                ),
+                response_scroll: 0,
+                is_loading: false,
+                pending_request_id: None,
+                streaming_body: String::new(),
+                bytes_received: 0,
+                selected_header: 0,
+                auth_field: AuthField::Token,
+            },
             ws: WebSocketState::default(),
             gql: GraphQLState::default(),
-            dummy_input: String::new(),
+            workspace: WorkspaceState {
+                project: None,
+                path_input: String::new(),
+                selected_endpoint: 0,
+            },
+            history: HistoryState { index: None },
+            storage: Storage::new(),
+            next_request_id: 1,
         }
     }
 
@@ -196,12 +258,12 @@ impl AppState {
 
     /// Get the current input field content
     pub fn current_input(&self) -> &str {
-        match self.active_panel {
-            Panel::Url => &self.request.url,
-            Panel::Body => &self.request.body,
-            Panel::Auth => match &self.request.auth {
+        match self.navigation.active_panel {
+            Panel::Url => &self.http.request.url,
+            Panel::Body => &self.http.request.body,
+            Panel::Auth => match &self.http.request.auth {
                 AuthType::Bearer(token) => token,
-                AuthType::Basic { username, password } => match self.auth_field {
+                AuthType::Basic { username, password } => match self.http.auth_field {
                     AuthField::Token => "",
                     AuthField::Username => username,
                     AuthField::Password => password,
@@ -214,19 +276,19 @@ impl AppState {
 
     /// Get mutable reference to current input field
     pub fn current_input_mut(&mut self) -> &mut String {
-        match self.active_panel {
-            Panel::Url => &mut self.request.url,
-            Panel::Body => &mut self.request.body,
-            Panel::Auth => match &mut self.request.auth {
+        match self.navigation.active_panel {
+            Panel::Url => &mut self.http.request.url,
+            Panel::Body => &mut self.http.request.body,
+            Panel::Auth => match &mut self.http.request.auth {
                 AuthType::Bearer(token) => token,
-                AuthType::Basic { username, password } => match self.auth_field {
-                    AuthField::Token => &mut self.dummy_input,
+                AuthType::Basic { username, password } => match self.http.auth_field {
+                    AuthField::Token => &mut self.ui.dummy_input,
                     AuthField::Username => username,
                     AuthField::Password => password,
                 },
-                AuthType::None => &mut self.dummy_input,
+                AuthType::None => &mut self.ui.dummy_input,
             },
-            _ => &mut self.dummy_input,
+            _ => &mut self.ui.dummy_input,
         }
     }
 
@@ -235,31 +297,31 @@ impl AppState {
         use crate::messages::render::{GqlRenderState, HttpRenderState, WsRenderState};
 
         RenderState {
-            active_tab: self.active_tab,
-            input_mode: self.input_mode,
-            show_help: self.show_help,
+            active_tab: self.navigation.active_tab,
+            input_mode: self.ui.input_mode,
+            show_help: self.ui.show_help,
             http: HttpRenderState {
-                method: self.request.method.clone(),
-                url: self.request.url.clone(),
-                body: self.request.body.clone(),
-                headers: self.request.headers.clone(),
-                auth: self.request.auth.clone(),
-                ignore_ssl_errors: self.request.ignore_ssl_errors,
-                active_panel: self.active_panel,
-                cursor_position: self.cursor_position,
-                response: self.response.clone(),
-                highlighted_response: self.highlighted_response.clone(),
-                response_scroll: self.response_scroll,
-                is_loading: self.is_loading,
-                selected_header: self.selected_header,
-                auth_field: self.auth_field,
-                history_index: self.history_index,
-                workspace: self.workspace.clone(),
-                workspace_path_input: self.workspace_path_input.clone(),
-                selected_endpoint: self.selected_endpoint,
-                show_curl_import: self.show_curl_import,
-                curl_import_buffer: self.curl_import_buffer.clone(),
-                show_workspace_input: self.show_workspace_input,
+                method: self.http.request.method.clone(),
+                url: self.http.request.url.clone(),
+                body: self.http.request.body.clone(),
+                headers: self.http.request.headers.clone(),
+                auth: self.http.request.auth.clone(),
+                ignore_ssl_errors: self.http.request.ignore_ssl_errors,
+                active_panel: self.navigation.active_panel,
+                cursor_position: self.ui.cursor_position,
+                response: self.http.response.clone(),
+                highlighted_response: self.http.highlighted_response.clone(),
+                response_scroll: self.http.response_scroll,
+                is_loading: self.http.is_loading,
+                selected_header: self.http.selected_header,
+                auth_field: self.http.auth_field,
+                history_index: self.history.index,
+                workspace: self.workspace.project.clone(),
+                workspace_path_input: self.workspace.path_input.clone(),
+                selected_endpoint: self.workspace.selected_endpoint,
+                show_curl_import: self.ui.show_curl_import,
+                curl_import_buffer: self.ui.curl_import_buffer.clone(),
+                show_workspace_input: self.ui.show_workspace_input,
             },
             ws: WsRenderState {
                 url: self.ws.url.clone(),
