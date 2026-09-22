@@ -250,7 +250,10 @@ mod tests {
         let req = Request::default();
         assert_eq!(req.method, HttpMethod::GET);
         assert!(!req.url.is_empty(), "default URL should not be empty");
-        assert!(req.url.starts_with("http"), "default URL should start with http");
+        assert!(
+            req.url.starts_with("http"),
+            "default URL should start with http"
+        );
         // Should have at least the two default headers (Content-Type, Accept)
         assert!(req.headers.len() >= 2);
         assert_eq!(req.auth, AuthType::None);
@@ -265,7 +268,10 @@ mod tests {
         let mut env = Environment::new("test");
         assert_eq!(env.name, "test");
         env.set("base_url", "https://api.example.com");
-        assert_eq!(env.get("base_url"), Some(&"https://api.example.com".to_string()));
+        assert_eq!(
+            env.get("base_url"),
+            Some(&"https://api.example.com".to_string())
+        );
     }
 
     #[test]

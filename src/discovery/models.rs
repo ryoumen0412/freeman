@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Detected API framework
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Framework {
     FastAPI,
     Flask,
@@ -150,7 +150,7 @@ impl DiscoveredEndpoint {
 }
 
 /// A workspace project with discovered endpoints
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code)] // Some fields stored for future features
 pub struct WorkspaceProject {
     /// Project root directory

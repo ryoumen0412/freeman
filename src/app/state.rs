@@ -343,3 +343,133 @@ impl AppState {
         }
     }
 }
+
+// ============================================================================
+// UiState methods
+// ============================================================================
+
+impl UiState {
+    pub fn toggle_help(&mut self) {
+        self.show_help = !self.show_help;
+    }
+
+    pub fn close_help(&mut self) {
+        self.show_help = false;
+    }
+
+    pub fn open_curl_import(&mut self) {
+        self.show_curl_import = true;
+    }
+
+    pub fn curl_import_char(&mut self, c: char) {
+        self.curl_import_buffer.push(c);
+    }
+
+    pub fn curl_import_backspace(&mut self) {
+        self.curl_import_buffer.pop();
+    }
+
+    pub fn cancel_curl_import(&mut self) {
+        self.curl_import_buffer.clear();
+        self.show_curl_import = false;
+    }
+
+    pub fn open_workspace_input(&mut self) {
+        self.show_workspace_input = true;
+    }
+
+    pub fn close_workspace_input(&mut self) {
+        self.show_workspace_input = false;
+    }
+}
+
+// ============================================================================
+// WorkspaceState methods
+// ============================================================================
+
+impl WorkspaceState {
+    pub fn next_endpoint(&mut self) {
+        if let Some(ws) = &self.project {
+            if !ws.endpoints.is_empty() {
+                self.selected_endpoint = (self.selected_endpoint + 1) % ws.endpoints.len();
+            }
+        }
+    }
+
+    pub fn prev_endpoint(&mut self) {
+        if let Some(ws) = &self.project {
+            if !ws.endpoints.is_empty() {
+                self.selected_endpoint = self
+                    .selected_endpoint
+                    .checked_sub(1)
+                    .unwrap_or(ws.endpoints.len() - 1);
+            }
+        }
+    }
+
+    pub fn path_char(&mut self, c: char) {
+        self.path_input.push(c);
+    }
+
+    pub fn path_backspace(&mut self) {
+        self.path_input.pop();
+    }
+
+    pub fn path_autocomplete(&mut self) {
+        use std::fs;
+        use std::path::PathBuf;
+
+        // Expand ~ to home directory
+        let input = if self.path_input.starts_with('~') {
+            if let Some(home) = dirs::home_dir() {
+                self.path_input.replacen("~", &home.to_string_lossy(), 1)
+            } else {
+                return;
+            }
+        } else {
+            self.path_input.clone()
+        };
+
+        let path = PathBuf::from(&input);
+
+        if path.is_dir() && !input.ends_with('/') {
+            self.path_input = format!("{}/", input);
+            return;
+        }
+
+        let (parent, prefix) = if input.ends_with('/') {
+            (PathBuf::from(&input), String::new())
+        } else if let Some(parent) = path.parent() {
+            let prefix = path
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            (parent.to_path_buf(), prefix)
+        } else {
+            return;
+        };
+
+        if let Ok(entries) = fs::read_dir(&parent) {
+            let mut matches: Vec<String> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .filter(|name| name.starts_with(&prefix) && !name.starts_with('.'))
+                .collect();
+
+            matches.sort();
+
+            if matches.len() == 1 {
+                let completed = parent.join(&matches[0]);
+                self.path_input = format!("{}/", completed.to_string_lossy());
+            } else if matches.len() > 1 {
+                if let Some(common) = crate::app::text_utils::safe_common_prefix(&matches) {
+                    if common.len() > prefix.len() {
+                        let completed = parent.join(&common);
+                        self.path_input = completed.to_string_lossy().to_string();
+                    }
+                }
+            }
+        }
+    }
+}

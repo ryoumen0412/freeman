@@ -57,17 +57,19 @@ impl AppActor {
     /// Handle a UI event, returns true if quit was requested
     fn handle_ui_event(&mut self, event: UiEvent) -> bool {
         match event {
-            // Tab switching
+            // Tab switching (cross-state: navigation + ui)
             UiEvent::SwitchTab(tab) => self.state.switch_tab(tab),
 
             // Panel navigation
             UiEvent::NextPanel => self.state.next_panel(),
             UiEvent::PrevPanel => self.state.prev_panel(),
             UiEvent::FocusWorkspace => self.state.focus_workspace(),
-            UiEvent::ScrollUp => self.state.scroll_up(),
-            UiEvent::ScrollDown => self.state.scroll_down(),
 
-            // Input editing
+            // HTTP scrolling (direct on sub-state)
+            UiEvent::ScrollUp => self.state.http.scroll_up(),
+            UiEvent::ScrollDown => self.state.http.scroll_down(),
+
+            // Input editing (cross-state: ui + current_input)
             UiEvent::StartEditing => self.state.start_editing(),
             UiEvent::StopEditing => self.state.stop_editing(),
             UiEvent::CharInput(c) => self.state.enter_char(c),
@@ -76,10 +78,9 @@ impl AppActor {
             UiEvent::CursorRight => self.state.move_cursor_right(),
 
             // Request actions
-            UiEvent::CycleMethod => self.state.cycle_method(),
-            UiEvent::ToggleSslErrors => self.state.toggle_ssl_errors(),
+            UiEvent::CycleMethod => self.state.http.cycle_method(),
+            UiEvent::ToggleSslErrors => self.state.http.toggle_ssl_errors(),
             UiEvent::SendRequest => {
-                // Stop editing first if in URL panel
                 if self.state.ui.input_mode == crate::messages::ui_events::InputMode::Editing {
                     self.state.stop_editing();
                 }
@@ -88,67 +89,74 @@ impl AppActor {
                 }
             }
             UiEvent::CancelRequest => {
-                if let Some(cmd) = self.state.cancel_request() {
+                if let Some(cmd) = self.state.http.cancel_request() {
                     let _ = self.network_tx.send(cmd);
                 }
             }
 
-            // Headers
-            UiEvent::NextHeader => self.state.next_header(),
-            UiEvent::PrevHeader => self.state.prev_header(),
-            UiEvent::ToggleHeader => self.state.toggle_header(),
-            UiEvent::AddHeader => self.state.add_header(),
-            UiEvent::DeleteHeader => self.state.delete_header(),
+            // Headers (direct on sub-state)
+            UiEvent::NextHeader => self.state.http.next_header(),
+            UiEvent::PrevHeader => self.state.http.prev_header(),
+            UiEvent::ToggleHeader => self.state.http.toggle_header(),
+            UiEvent::AddHeader => self.state.http.add_header(),
+            UiEvent::DeleteHeader => self.state.http.delete_header(),
 
             // Auth
-            UiEvent::CycleAuth => self.state.cycle_auth(),
-            UiEvent::NextAuthField => self.state.next_auth_field(),
+            UiEvent::CycleAuth => self.state.http.cycle_auth(),
+            UiEvent::NextAuthField => self.state.next_auth_field(), // cross-state: http + ui
 
-            // History
+            // History (cross-state: storage + http + history + ui)
             UiEvent::HistoryPrev => self.state.history_prev(),
             UiEvent::HistoryNext => self.state.history_next(),
 
             // Workspace
             UiEvent::OpenWorkspaceInput => self.state.open_workspace_input(),
-            UiEvent::WorkspacePathChar(c) => self.state.workspace_path_char(c),
-            UiEvent::WorkspacePathBackspace => self.state.workspace_path_backspace(),
-            UiEvent::WorkspacePathAutocomplete => self.state.workspace_path_autocomplete(),
-            UiEvent::LoadWorkspace => self.state.load_workspace(),
-            UiEvent::CancelWorkspaceInput => self.state.cancel_workspace_input(),
-            UiEvent::NextEndpoint => self.state.next_endpoint(),
-            UiEvent::PrevEndpoint => self.state.prev_endpoint(),
-            UiEvent::SelectEndpoint => self.state.select_endpoint(),
+            UiEvent::WorkspacePathChar(c) => self.state.workspace.path_char(c),
+            UiEvent::WorkspacePathBackspace => self.state.workspace.path_backspace(),
+            UiEvent::WorkspacePathAutocomplete => self.state.workspace.path_autocomplete(),
+            UiEvent::LoadWorkspace => {
+                let path = self.state.workspace.path_input.clone();
+                match crate::discovery::load_workspace(&path) {
+                    Ok(result) => self.state.apply_workspace_result(result),
+                    Err(err) => self.state.apply_workspace_error(&err),
+                }
+            }
+            UiEvent::CancelWorkspaceInput => self.state.cancel_workspace_input(), // cross-state
+            UiEvent::NextEndpoint => self.state.workspace.next_endpoint(),
+            UiEvent::PrevEndpoint => self.state.workspace.prev_endpoint(),
+            UiEvent::SelectEndpoint => self.state.select_endpoint(), // cross-state
 
             // cURL
-            UiEvent::ShowCurlImport => self.state.show_curl_import(),
-            UiEvent::CurlImportChar(c) => self.state.curl_import_char(c),
-            UiEvent::CurlImportBackspace => self.state.curl_import_backspace(),
-            UiEvent::ImportCurl => self.state.import_curl(),
-            UiEvent::CancelCurlImport => self.state.cancel_curl_import(),
-            UiEvent::ExportCurl => self.state.export_curl(),
+            UiEvent::ShowCurlImport => self.state.ui.open_curl_import(),
+            UiEvent::CurlImportChar(c) => self.state.ui.curl_import_char(c),
+            UiEvent::CurlImportBackspace => self.state.ui.curl_import_backspace(),
+            UiEvent::ImportCurl => self.state.import_curl(), // cross-state: ui + http
+            UiEvent::CancelCurlImport => self.state.ui.cancel_curl_import(),
+            UiEvent::ExportCurl => self.state.http.export_curl(),
 
             // WebSocket
             UiEvent::WsConnect => {
                 if let Some(cmd) = self.state.ws_connect() {
+                    // cross-state: ws + next_id
                     let _ = self.network_tx.send(cmd);
                 }
             }
             UiEvent::WsDisconnect => {
-                if let Some(cmd) = self.state.ws_disconnect() {
+                if let Some(cmd) = self.state.ws.disconnect() {
                     let _ = self.network_tx.send(cmd);
                 }
             }
             UiEvent::WsSend => {
-                if let Some(cmd) = self.state.ws_send() {
+                if let Some(cmd) = self.state.ws.send() {
                     let _ = self.network_tx.send(cmd);
                 }
             }
-            UiEvent::WsEditUrl => self.state.ws_start_url_edit(),
-            UiEvent::WsEditMessage => self.state.ws_start_input_edit(),
-            UiEvent::WsCharInput(c) => self.state.ws_char(c),
-            UiEvent::WsBackspace => self.state.ws_backspace(),
-            UiEvent::WsCursorLeft => self.state.ws_cursor_left(),
-            UiEvent::WsCursorRight => self.state.ws_cursor_right(),
+            UiEvent::WsEditUrl => self.state.ws_start_url_edit(), // cross-state: ws + ui
+            UiEvent::WsEditMessage => self.state.ws_start_input_edit(), // cross-state: ws + ui
+            UiEvent::WsCharInput(c) => self.state.ws.char_input(c),
+            UiEvent::WsBackspace => self.state.ws.backspace(),
+            UiEvent::WsCursorLeft => self.state.ws.cursor_left(),
+            UiEvent::WsCursorRight => self.state.ws.cursor_right(),
 
             // GraphQL
             UiEvent::GqlExecuteQuery => {
@@ -156,19 +164,20 @@ impl AppActor {
                     self.state.stop_editing();
                 }
                 if let Some(cmd) = self.state.gql_execute_query() {
+                    // cross-state
                     let _ = self.network_tx.send(cmd);
                 }
             }
-            UiEvent::GqlEditEndpoint => self.state.gql_edit_endpoint(),
-            UiEvent::GqlEditQuery => self.state.gql_edit_query(),
-            UiEvent::GqlEditVariables => self.state.gql_edit_variables(),
-            UiEvent::GqlCharInput(c) => self.state.gql_char(c),
-            UiEvent::GqlBackspace => self.state.gql_backspace(),
-            UiEvent::GqlCursorLeft => self.state.gql_cursor_left(),
-            UiEvent::GqlCursorRight => self.state.gql_cursor_right(),
-            UiEvent::GqlNextField => self.state.gql_next_field(),
-            UiEvent::GqlScrollUp => self.state.gql_scroll_up(),
-            UiEvent::GqlScrollDown => self.state.gql_scroll_down(),
+            UiEvent::GqlEditEndpoint => self.state.gql_edit_endpoint(), // cross-state: gql + ui
+            UiEvent::GqlEditQuery => self.state.gql_edit_query(),       // cross-state: gql + ui
+            UiEvent::GqlEditVariables => self.state.gql_edit_variables(), // cross-state: gql + ui
+            UiEvent::GqlCharInput(c) => self.state.gql.char_input(c),
+            UiEvent::GqlBackspace => self.state.gql.backspace(),
+            UiEvent::GqlCursorLeft => self.state.gql.cursor_left(),
+            UiEvent::GqlCursorRight => self.state.gql.cursor_right(),
+            UiEvent::GqlNextField => self.state.gql.next_field(),
+            UiEvent::GqlScrollUp => self.state.gql.scroll_up(),
+            UiEvent::GqlScrollDown => self.state.gql.scroll_down(),
 
             // Popups
             UiEvent::ToggleHelp => self.state.toggle_help(),

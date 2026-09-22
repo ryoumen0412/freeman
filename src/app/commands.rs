@@ -73,11 +73,11 @@ impl AppState {
     // ========================
 
     pub fn toggle_help(&mut self) {
-        self.ui.show_help = !self.ui.show_help;
+        self.ui.toggle_help();
     }
 
     pub fn close_help(&mut self) {
-        self.ui.show_help = false;
+        self.ui.close_help();
     }
 
     pub fn switch_tab(&mut self, tab: AppTab) {

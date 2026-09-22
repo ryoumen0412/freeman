@@ -273,14 +273,22 @@ mod tests {
     #[test]
     fn test_detect_fastapi_from_requirements() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("requirements.txt"), "fastapi==0.100.0\nuvicorn").unwrap();
+        fs::write(
+            dir.path().join("requirements.txt"),
+            "fastapi==0.100.0\nuvicorn",
+        )
+        .unwrap();
         assert_eq!(detect_framework(dir.path()), Framework::FastAPI);
     }
 
     #[test]
     fn test_detect_flask_from_requirements() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("requirements.txt"), "flask==3.0.0\ngunicorn").unwrap();
+        fs::write(
+            dir.path().join("requirements.txt"),
+            "flask==3.0.0\ngunicorn",
+        )
+        .unwrap();
         assert_eq!(detect_framework(dir.path()), Framework::Flask);
     }
 
@@ -393,7 +401,11 @@ mod tests {
     #[test]
     fn test_detect_axum_from_cargo_toml() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("Cargo.toml"), "[dependencies]\naxum = \"0.7\"").unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[dependencies]\naxum = \"0.7\"",
+        )
+        .unwrap();
         assert_eq!(detect_framework(dir.path()), Framework::Axum);
     }
 

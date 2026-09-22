@@ -1,188 +1,70 @@
+//! Workspace orchestration — methods that coordinate across sub-states.
+//!
+//! Pure workspace logic (next/prev endpoint, path editing) lives in
+//! `state.rs` (impl WorkspaceState). This file contains methods that
+//! touch workspace + http + ui + navigation.
+
 use crate::app::AppState;
-use crate::discovery::{self, detector, openapi, DiscoveredEndpoint};
+use crate::discovery::{
+    AuthRequirement, DiscoveredEndpoint, DiscoveryError, DiscoverySource, WorkspaceLoadResult,
+};
 use crate::messages::ui_events::Panel;
 use crate::models::AuthType;
 use crate::models::HttpMethod;
-use std::path::PathBuf;
 
 impl AppState {
     // ========================
-    // Workspace
+    // Workspace input (cross-state: ui + workspace)
     // ========================
 
     pub fn open_workspace_input(&mut self) {
-        self.ui.show_workspace_input = true;
-    }
-
-    pub fn workspace_path_char(&mut self, c: char) {
-        self.workspace.path_input.push(c);
-    }
-
-    pub fn workspace_path_backspace(&mut self) {
-        self.workspace.path_input.pop();
+        self.ui.open_workspace_input();
     }
 
     pub fn cancel_workspace_input(&mut self) {
-        self.ui.show_workspace_input = false;
+        self.ui.close_workspace_input();
         self.workspace.path_input.clear();
     }
 
-    pub fn workspace_path_autocomplete(&mut self) {
-        use std::fs;
+    // ========================
+    // Apply workspace load results (pure data mutation: workspace + http + ui)
+    // ========================
 
-        // Expand ~ to home directory
-        let input = if self.workspace.path_input.starts_with('~') {
-            if let Some(home) = dirs::home_dir() {
-                self.workspace.path_input
-                    .replacen("~", &home.to_string_lossy(), 1)
-            } else {
-                return;
-            }
-        } else {
-            self.workspace.path_input.clone()
-        };
-
-        let path = PathBuf::from(&input);
-
-        // If it's already a valid directory, try to complete further
-        if path.is_dir() && !input.ends_with('/') {
-            self.workspace.path_input = format!("{}/", input);
-            return;
-        }
-
-        // Get parent directory and prefix to match
-        let (parent, prefix) = if input.ends_with('/') {
-            (PathBuf::from(&input), String::new())
-        } else if let Some(parent) = path.parent() {
-            let prefix = path
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default();
-            (parent.to_path_buf(), prefix)
-        } else {
-            return;
-        };
-
-        // Read directory and find matches
-        if let Ok(entries) = fs::read_dir(&parent) {
-            let mut matches: Vec<String> = entries
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().is_dir())
-                .filter_map(|e| e.file_name().into_string().ok())
-                .filter(|name| name.starts_with(&prefix) && !name.starts_with('.'))
-                .collect();
-
-            matches.sort();
-
-            if matches.len() == 1 {
-                // Single match - complete it
-                let completed = parent.join(&matches[0]);
-                self.workspace.path_input = format!("{}/", completed.to_string_lossy());
-            } else if matches.len() > 1 {
-                // Multiple matches - complete common prefix
-                if let Some(common) = common_prefix(&matches) {
-                    if common.len() > prefix.len() {
-                        let completed = parent.join(&common);
-                        self.workspace.path_input = completed.to_string_lossy().to_string();
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn load_workspace(&mut self) {
-        let path = self.workspace.path_input.clone();
-
-        // Expand ~ to home directory
-        let expanded = if path.starts_with('~') {
-            if let Some(home) = dirs::home_dir() {
-                path.replacen("~", &home.to_string_lossy(), 1)
-            } else {
-                path.clone()
-            }
-        } else {
-            path.clone()
-        };
-        let path_buf = PathBuf::from(&expanded);
-
-        // Try to find and parse OpenAPI spec first
-        if let Some(spec_path) = detector::find_openapi_spec(&path_buf) {
-            match openapi::parse_openapi(&spec_path) {
-                Ok(project) => {
-                    let count = project.endpoints.len();
-                    self.workspace.project = Some(project);
-                    self.workspace.selected_endpoint = 0;
-                    self.http.response.body = format!("✓ Loaded {} endpoints from OpenAPI spec", count);
-                    self.ui.show_workspace_input = false;
-                    self.workspace.path_input.clear();
-                    return;
-                }
-                Err(e) => {
-                    self.http.response.body = format!("Error parsing OpenAPI: {}", e);
-                }
-            }
-        }
-
-        // Fallback to source code parsing based on detected framework
-        let framework = detector::detect_framework(&path_buf);
-
-        let project = match framework {
-            discovery::Framework::FastAPI | discovery::Framework::Flask => {
-                Some(discovery::load_python_project(&path_buf, framework))
-            }
-            discovery::Framework::Django => Some(discovery::load_django_project(&path_buf)),
-            discovery::Framework::Express => Some(discovery::load_express_project(&path_buf)),
-            discovery::Framework::NestJS => Some(discovery::load_nestjs_project(&path_buf)),
-            discovery::Framework::SpringBoot => Some(discovery::load_java_project(&path_buf)),
-            discovery::Framework::Laravel => Some(discovery::load_laravel_project(&path_buf)),
-            discovery::Framework::Actix | discovery::Framework::Axum => {
-                Some(discovery::load_rust_project(&path_buf, framework))
-            }
-            discovery::Framework::Gin => Some(discovery::load_go_project(&path_buf, framework)),
-            _ => None,
-        };
-
-        if let Some(proj) = project {
-            let count = proj.endpoints.len();
-            let fw_name = proj.framework.as_str().to_string();
-            self.workspace.project = Some(proj);
-            self.workspace.selected_endpoint = 0;
-            self.http.response.body =
-                format!("✓ Loaded {} endpoints from {} source code", count, fw_name);
-        } else {
-            self.http.response.body = format!(
-                "No supported framework detected in {}\n\nSupported: OpenAPI, FastAPI, Flask, Django, Express.js, NestJS, Spring Boot, Laravel, Actix Web, Axum, Gin",
-                expanded
-            );
-        }
-
-        self.ui.show_workspace_input = false;
+    pub fn apply_workspace_result(&mut self, result: WorkspaceLoadResult) {
+        let count = result.project.endpoints.len();
+        self.workspace.project = Some(result.project);
+        self.workspace.selected_endpoint = 0;
+        self.ui.close_workspace_input();
         self.workspace.path_input.clear();
+
+        self.http.response.body = match result.source {
+            DiscoverySource::OpenApi(_) => {
+                format!("✓ Loaded {} endpoints from OpenAPI spec", count)
+            }
+            DiscoverySource::SourceCode(framework) => {
+                format!(
+                    "✓ Loaded {} endpoints from {} source code",
+                    count,
+                    framework.as_str()
+                )
+            }
+        };
     }
 
-    pub fn next_endpoint(&mut self) {
-        if let Some(ws) = &self.workspace.project {
-            if !ws.endpoints.is_empty() {
-                self.workspace.selected_endpoint = (self.workspace.selected_endpoint + 1) % ws.endpoints.len();
-            }
-        }
+    pub fn apply_workspace_error(&mut self, error: &DiscoveryError) {
+        self.ui.close_workspace_input();
+        self.workspace.path_input.clear();
+        self.http.response.body = error.to_string();
     }
 
-    pub fn prev_endpoint(&mut self) {
-        if let Some(ws) = &self.workspace.project {
-            if !ws.endpoints.is_empty() {
-                self.workspace.selected_endpoint = self
-                    .workspace.selected_endpoint
-                    .checked_sub(1)
-                    .unwrap_or(ws.endpoints.len() - 1);
-            }
-        }
-    }
+    // ========================
+    // Select endpoint (cross-state: workspace + http + ui + navigation)
+    // ========================
 
     pub fn select_endpoint(&mut self) {
-        // Clone endpoint to avoid borrow conflict
         let endpoint_opt = self
-            .workspace.project
+            .workspace
+            .project
             .as_ref()
             .and_then(|ws| ws.endpoints.get(self.workspace.selected_endpoint).cloned());
 
@@ -193,7 +75,6 @@ impl AppState {
     }
 
     fn load_endpoint(&mut self, endpoint: &DiscoveredEndpoint) {
-        // Set method
         self.http.request.method = match endpoint.method.to_uppercase().as_str() {
             "GET" => HttpMethod::GET,
             "POST" => HttpMethod::POST,
@@ -203,33 +84,30 @@ impl AppState {
             _ => HttpMethod::GET,
         };
 
-        // Set URL (combine base URL with path)
         let base = self
-            .workspace.project
+            .workspace
+            .project
             .as_ref()
             .and_then(|w| w.base_url.clone())
             .unwrap_or_else(|| "http://localhost:8000".to_string());
         self.http.request.url = format!("{}{}", base.trim_end_matches('/'), endpoint.path);
         self.ui.cursor_position = self.http.request.url.len();
 
-        // Set auth
         self.http.request.auth = match &endpoint.auth {
-            discovery::AuthRequirement::Bearer => AuthType::Bearer(String::new()),
-            discovery::AuthRequirement::Basic => AuthType::Basic {
+            AuthRequirement::Bearer => AuthType::Bearer(String::new()),
+            AuthRequirement::Basic => AuthType::Basic {
                 username: String::new(),
                 password: String::new(),
             },
             _ => AuthType::None,
         };
 
-        // Set body example if available
         if let Some(body) = &endpoint.body {
             if let Some(example) = &body.example {
                 self.http.request.body = example.clone();
             }
         }
 
-        // Clear previous response
         self.http.response.body = format!(
             "Loaded: {} {}\n\nAuth: {}",
             endpoint.method,
@@ -238,21 +116,14 @@ impl AppState {
         );
         self.http.response.status_code = None;
     }
-
-    // ========================
-    // Request sending
-    // ========================
-}
-
-/// Find common prefix among strings (UTF-8 safe)
-pub(crate) fn common_prefix(strings: &[String]) -> Option<String> {
-    crate::app::text_utils::safe_common_prefix(strings)
 }
 
 #[cfg(test)]
 mod tests {
     use crate::app::AppState;
-    use crate::discovery::models::{AuthRequirement, DiscoveredEndpoint, Framework, WorkspaceProject};
+    use crate::discovery::models::{
+        AuthRequirement, DiscoveredEndpoint, Framework, WorkspaceProject,
+    };
     use crate::messages::ui_events::Panel;
     use crate::models::{AuthType, HttpMethod};
     use std::path::PathBuf;
@@ -261,7 +132,6 @@ mod tests {
         AppState::new()
     }
 
-    /// Build a WorkspaceProject with the given endpoints for testing.
     fn make_workspace(base_url: &str, endpoints: Vec<DiscoveredEndpoint>) -> WorkspaceProject {
         let mut proj = WorkspaceProject::new(PathBuf::from("/tmp/test-proj"));
         proj.framework = Framework::OpenAPI;
@@ -299,10 +169,10 @@ mod tests {
     #[test]
     fn test_workspace_path_char_appends_to_buffer() {
         let mut state = make_state();
-        state.workspace_path_char('/');
-        state.workspace_path_char('t');
-        state.workspace_path_char('m');
-        state.workspace_path_char('p');
+        state.workspace.path_char('/');
+        state.workspace.path_char('t');
+        state.workspace.path_char('m');
+        state.workspace.path_char('p');
         assert_eq!(state.workspace.path_input, "/tmp");
     }
 
@@ -310,9 +180,9 @@ mod tests {
     fn test_workspace_path_backspace_removes_last_char() {
         let mut state = make_state();
         state.workspace.path_input = "/tmp/pro".to_string();
-        state.workspace_path_backspace();
+        state.workspace.path_backspace();
         assert_eq!(state.workspace.path_input, "/tmp/pr");
-        state.workspace_path_backspace();
+        state.workspace.path_backspace();
         assert_eq!(state.workspace.path_input, "/tmp/p");
     }
 
@@ -320,11 +190,11 @@ mod tests {
     fn test_workspace_path_backspace_on_empty_does_not_panic() {
         let mut state = make_state();
         state.workspace.path_input = String::new();
-        state.workspace_path_backspace(); // must not panic
+        state.workspace.path_backspace();
         assert!(state.workspace.path_input.is_empty());
     }
 
-    // ── Endpoint navigation ───────────────────────────────────────────────────
+    // ── Endpoint navigation (direct on sub-state) ────────────────────────────
 
     #[test]
     fn test_next_endpoint_advances_selection() {
@@ -338,9 +208,9 @@ mod tests {
             ],
         ));
         state.workspace.selected_endpoint = 0;
-        state.next_endpoint();
+        state.workspace.next_endpoint();
         assert_eq!(state.workspace.selected_endpoint, 1);
-        state.next_endpoint();
+        state.workspace.next_endpoint();
         assert_eq!(state.workspace.selected_endpoint, 2);
     }
 
@@ -354,9 +224,9 @@ mod tests {
                 get_endpoint("POST", "/b", AuthRequirement::None),
             ],
         ));
-        state.workspace.selected_endpoint = 1; // last
-        state.next_endpoint();
-        assert_eq!(state.workspace.selected_endpoint, 0); // wraps
+        state.workspace.selected_endpoint = 1;
+        state.workspace.next_endpoint();
+        assert_eq!(state.workspace.selected_endpoint, 0);
     }
 
     #[test]
@@ -371,8 +241,8 @@ mod tests {
             ],
         ));
         state.workspace.selected_endpoint = 0;
-        state.prev_endpoint();
-        assert_eq!(state.workspace.selected_endpoint, 2); // wraps to last
+        state.workspace.prev_endpoint();
+        assert_eq!(state.workspace.selected_endpoint, 2);
     }
 
     #[test]
@@ -380,7 +250,7 @@ mod tests {
         let mut state = make_state();
         state.workspace.project = None;
         state.workspace.selected_endpoint = 0;
-        state.next_endpoint(); // must not panic
+        state.workspace.next_endpoint();
         assert_eq!(state.workspace.selected_endpoint, 0);
     }
 
@@ -460,6 +330,143 @@ mod tests {
     fn test_select_endpoint_no_op_when_no_workspace() {
         let mut state = make_state();
         state.workspace.project = None;
-        state.select_endpoint(); // must not panic
+        state.select_endpoint();
+    }
+
+    // ── Apply workspace load result / error ───────────────────────────────────
+
+    #[test]
+    fn test_apply_workspace_result_openapi() {
+        let mut state = make_state();
+        state.ui.show_workspace_input = true;
+        state.workspace.path_input = "/some/spec/dir".to_string();
+
+        let proj = make_workspace(
+            "http://localhost:8000",
+            vec![get_endpoint("GET", "/users", AuthRequirement::None)],
+        );
+        let result = crate::discovery::WorkspaceLoadResult {
+            project: proj,
+            source: crate::discovery::DiscoverySource::OpenApi(PathBuf::from("/some/spec/dir/openapi.yaml")),
+        };
+
+        state.apply_workspace_result(result);
+
+        assert!(state.workspace.project.is_some());
+        assert_eq!(state.workspace.selected_endpoint, 0);
+        assert!(!state.ui.show_workspace_input);
+        assert!(state.workspace.path_input.is_empty());
+        assert_eq!(
+            state.http.response.body,
+            "✓ Loaded 1 endpoints from OpenAPI spec"
+        );
+    }
+
+    #[test]
+    fn test_apply_workspace_result_source_code() {
+        let mut state = make_state();
+        state.ui.show_workspace_input = true;
+        state.workspace.path_input = "/some/project".to_string();
+
+        let mut proj = make_workspace(
+            "http://localhost:8000",
+            vec![
+                get_endpoint("GET", "/a", AuthRequirement::None),
+                get_endpoint("POST", "/b", AuthRequirement::None),
+            ],
+        );
+        proj.framework = Framework::FastAPI;
+
+        let result = crate::discovery::WorkspaceLoadResult {
+            project: proj,
+            source: crate::discovery::DiscoverySource::SourceCode(Framework::FastAPI),
+        };
+
+        state.apply_workspace_result(result);
+
+        assert!(state.workspace.project.is_some());
+        assert_eq!(state.workspace.selected_endpoint, 0);
+        assert!(!state.ui.show_workspace_input);
+        assert!(state.workspace.path_input.is_empty());
+        assert_eq!(
+            state.http.response.body,
+            "✓ Loaded 2 endpoints from FastAPI source code"
+        );
+    }
+
+    #[test]
+    fn test_apply_workspace_error() {
+        let mut state = make_state();
+        state.ui.show_workspace_input = true;
+        state.workspace.path_input = "/some/nonexistent".to_string();
+
+        let error = crate::discovery::DiscoveryError::NotFound(PathBuf::from("/some/nonexistent"));
+        state.apply_workspace_error(&error);
+
+        assert!(!state.ui.show_workspace_input);
+        assert!(state.workspace.path_input.is_empty());
+        assert_eq!(state.http.response.body, error.to_string());
+    }
+
+    #[test]
+    fn test_applying_workspace_selects_first_endpoint() {
+        let mut state = make_state();
+        state.workspace.selected_endpoint = 5; // Previous index
+        let proj = make_workspace(
+            "http://localhost:8000",
+            vec![
+                get_endpoint("GET", "/first", AuthRequirement::None),
+                get_endpoint("GET", "/second", AuthRequirement::None),
+            ],
+        );
+        let result = crate::discovery::WorkspaceLoadResult {
+            project: proj,
+            source: crate::discovery::DiscoverySource::SourceCode(Framework::FastAPI),
+        };
+
+        state.apply_workspace_result(result);
+        assert_eq!(state.workspace.selected_endpoint, 0);
+
+        // Subsequent select_endpoint loads the first endpoint
+        state.select_endpoint();
+        assert_eq!(state.http.request.method, HttpMethod::GET);
+        assert!(state.http.request.url.contains("/first"));
+    }
+
+    #[test]
+    fn test_integration_discovery_loader_to_app_state() {
+        use tempfile::tempdir;
+        let dir = tempdir().unwrap();
+        let spec_path = dir.path().join("openapi.yaml");
+        let spec_content = r#"
+openapi: 3.0.0
+info:
+  title: Integration API
+  version: 1.0.0
+paths:
+  /integration/test:
+    post:
+      summary: Post integration test
+      responses:
+        '200':
+          description: OK
+"#;
+        std::fs::write(&spec_path, spec_content).unwrap();
+
+        // 1. Discovery outside AppState
+        let load_result = crate::discovery::load_workspace(dir.path()).unwrap();
+
+        // 2. Pure state application inside AppState
+        let mut state = make_state();
+        state.apply_workspace_result(load_result);
+
+        assert!(state.workspace.project.is_some());
+        assert_eq!(state.workspace.selected_endpoint, 0);
+
+        // 3. Selection and navigation
+        state.select_endpoint();
+        assert_eq!(state.http.request.method, HttpMethod::POST);
+        assert!(state.http.request.url.contains("/integration/test"));
+        assert_eq!(state.navigation.active_panel, Panel::Url);
     }
 }

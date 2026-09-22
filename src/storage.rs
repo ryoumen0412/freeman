@@ -189,10 +189,14 @@ mod tests {
     #[test]
     fn test_history_lifo_order() {
         let mut storage = Storage::with_dir(PathBuf::from("/tmp/freeman_test_unused"));
-        let mut req_a = Request::default();
-        req_a.url = "https://a.example.com".to_string();
-        let mut req_b = Request::default();
-        req_b.url = "https://b.example.com".to_string();
+        let req_a = Request {
+            url: "https://a.example.com".to_string(),
+            ..Request::default()
+        };
+        let req_b = Request {
+            url: "https://b.example.com".to_string(),
+            ..Request::default()
+        };
 
         storage.add_to_history(HistoryEntry {
             request: req_a,
@@ -312,9 +316,11 @@ mod tests {
     #[test]
     fn test_history_method_reflects_request() {
         let mut storage = Storage::with_dir(PathBuf::from("/tmp/freeman_test_unused"));
-        let mut req = Request::default();
-        req.method = HttpMethod::POST;
-        req.url = "https://api.example.com/items".to_string();
+        let req = Request {
+            method: HttpMethod::POST,
+            url: "https://api.example.com/items".to_string(),
+            ..Request::default()
+        };
         storage.add_to_history(HistoryEntry {
             request: req,
             response: Response::default(),

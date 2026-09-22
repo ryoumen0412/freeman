@@ -408,11 +408,7 @@ paths:
         let endpoint = &project.endpoints[0];
         assert_eq!(endpoint.parameters.len(), 2);
 
-        let path_param = endpoint
-            .parameters
-            .iter()
-            .find(|p| p.name == "id")
-            .unwrap();
+        let path_param = endpoint.parameters.iter().find(|p| p.name == "id").unwrap();
         assert_eq!(path_param.location, ParameterLocation::Path);
         assert!(path_param.required);
         assert_eq!(path_param.param_type, "integer");

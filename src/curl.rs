@@ -267,7 +267,10 @@ mod tests {
             .headers
             .iter()
             .find(|h| h.key.to_lowercase() == "authorization");
-        assert!(auth_header.is_some(), "Authorization header should be in headers");
+        assert!(
+            auth_header.is_some(),
+            "Authorization header should be in headers"
+        );
         assert!(auth_header.unwrap().value.contains("Bearer"));
     }
 
@@ -314,7 +317,8 @@ mod tests {
 
     #[test]
     fn test_parse_duplicate_headers_deduped() {
-        let curl = r#"curl -H "Accept: application/json" -H "Accept: text/html" https://api.example.com"#;
+        let curl =
+            r#"curl -H "Accept: application/json" -H "Accept: text/html" https://api.example.com"#;
         let req = parse_curl(curl).unwrap();
         // Second Accept header should be ignored (duplicate key)
         let accept_headers: Vec<_> = req
@@ -331,8 +335,10 @@ mod tests {
     #[test]
     fn test_to_curl_simple_get() {
         use crate::models::Request;
-        let mut req = Request::default();
-        req.url = "https://api.example.com/users".to_string();
+        let mut req = Request {
+            url: "https://api.example.com/users".to_string(),
+            ..Request::default()
+        };
         req.headers.clear();
 
         let curl = to_curl(&req);
@@ -344,10 +350,12 @@ mod tests {
     #[test]
     fn test_to_curl_post_includes_method_and_body() {
         use crate::models::{HttpMethod, Request};
-        let mut req = Request::default();
-        req.method = HttpMethod::POST;
-        req.url = "https://api.example.com/items".to_string();
-        req.body = r#"{"name":"widget"}"#.to_string();
+        let mut req = Request {
+            method: HttpMethod::POST,
+            url: "https://api.example.com/items".to_string(),
+            body: r#"{"name":"widget"}"#.to_string(),
+            ..Request::default()
+        };
         req.headers.clear();
 
         let curl = to_curl(&req);
@@ -358,9 +366,11 @@ mod tests {
     #[test]
     fn test_to_curl_bearer_auth() {
         use crate::models::{AuthType, Request};
-        let mut req = Request::default();
-        req.url = "https://api.example.com".to_string();
-        req.auth = AuthType::Bearer("tok123".to_string());
+        let mut req = Request {
+            url: "https://api.example.com".to_string(),
+            auth: AuthType::Bearer("tok123".to_string()),
+            ..Request::default()
+        };
         req.headers.clear();
 
         let curl = to_curl(&req);
@@ -370,11 +380,13 @@ mod tests {
     #[test]
     fn test_to_curl_basic_auth() {
         use crate::models::{AuthType, Request};
-        let mut req = Request::default();
-        req.url = "https://api.example.com".to_string();
-        req.auth = AuthType::Basic {
-            username: "alice".to_string(),
-            password: "s3cr3t".to_string(),
+        let mut req = Request {
+            url: "https://api.example.com".to_string(),
+            auth: AuthType::Basic {
+                username: "alice".to_string(),
+                password: "s3cr3t".to_string(),
+            },
+            ..Request::default()
         };
         req.headers.clear();
 
@@ -385,9 +397,11 @@ mod tests {
     #[test]
     fn test_to_curl_disabled_headers_excluded() {
         use crate::models::{Header, HttpMethod, Request};
-        let mut req = Request::default();
-        req.method = HttpMethod::GET;
-        req.url = "https://api.example.com".to_string();
+        let mut req = Request {
+            method: HttpMethod::GET,
+            url: "https://api.example.com".to_string(),
+            ..Request::default()
+        };
         req.headers.clear();
 
         let mut disabled = Header::new("X-Debug", "true");
@@ -396,7 +410,10 @@ mod tests {
         req.headers.push(Header::new("X-Active", "yes"));
 
         let curl = to_curl(&req);
-        assert!(!curl.contains("X-Debug"), "disabled header should not appear");
+        assert!(
+            !curl.contains("X-Debug"),
+            "disabled header should not appear"
+        );
         assert!(curl.contains("X-Active"), "enabled header should appear");
     }
 
@@ -404,15 +421,17 @@ mod tests {
     fn test_roundtrip_post_with_basic_auth() {
         // Roundtrip with Basic auth: to_curl uses -u flag, parse_curl reads -u flag
         use crate::models::{AuthType, Header, HttpMethod, Request};
-        let mut req = Request::default();
-        req.method = HttpMethod::POST;
-        req.url = "https://api.example.com/data".to_string();
-        req.auth = AuthType::Basic {
-            username: "alice".to_string(),
-            password: "s3cr3t".to_string(),
+        let req = Request {
+            method: HttpMethod::POST,
+            url: "https://api.example.com/data".to_string(),
+            auth: AuthType::Basic {
+                username: "alice".to_string(),
+                password: "s3cr3t".to_string(),
+            },
+            body: r#"{"key":"value"}"#.to_string(),
+            headers: vec![Header::new("Content-Type", "application/json")],
+            ..Request::default()
         };
-        req.body = r#"{"key":"value"}"#.to_string();
-        req.headers = vec![Header::new("Content-Type", "application/json")];
 
         let curl_str = to_curl(&req);
         let parsed = parse_curl(&curl_str).unwrap();
@@ -429,4 +448,3 @@ mod tests {
         assert_eq!(parsed.body, req.body);
     }
 }
-
