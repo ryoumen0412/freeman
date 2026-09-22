@@ -101,9 +101,7 @@ pub fn load_workspace(path: impl AsRef<Path>) -> Result<WorkspaceLoadResult, Dis
         Framework::NestJS => Some(load_nestjs_project(&expanded)),
         Framework::SpringBoot => Some(load_java_project(&expanded)),
         Framework::Laravel => Some(load_laravel_project(&expanded)),
-        Framework::Actix | Framework::Axum => {
-            Some(load_rust_project(&expanded, framework.clone()))
-        }
+        Framework::Actix | Framework::Axum => Some(load_rust_project(&expanded, framework.clone())),
         Framework::Gin => Some(load_go_project(&expanded, framework.clone())),
         _ => None,
     };

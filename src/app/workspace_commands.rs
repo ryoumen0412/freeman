@@ -347,7 +347,9 @@ mod tests {
         );
         let result = crate::discovery::WorkspaceLoadResult {
             project: proj,
-            source: crate::discovery::DiscoverySource::OpenApi(PathBuf::from("/some/spec/dir/openapi.yaml")),
+            source: crate::discovery::DiscoverySource::OpenApi(PathBuf::from(
+                "/some/spec/dir/openapi.yaml",
+            )),
         };
 
         state.apply_workspace_result(result);
